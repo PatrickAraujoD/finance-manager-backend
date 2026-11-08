@@ -214,6 +214,12 @@ describe('FakeTokenService', () => {
     expect(a.token).not.toBe(b.token);
     expect(a.hash).not.toBe(a.token);
   });
+
+  it('hashes a presented refresh token to the same value generateRefresh returned', () => {
+    const svc = new FakeTokenService();
+    const a = svc.generateRefresh();
+    expect(svc.hashRefresh(a.token)).toBe(a.hash);
+  });
 });
 
 describe('FakeFileStorage', () => {
