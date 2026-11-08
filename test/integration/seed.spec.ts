@@ -3,7 +3,7 @@ import { User } from '../../src/domain/entities/user';
 import { Argon2Hasher } from '../../src/infrastructure/hashing/argon2-hasher';
 import { PrismaUserRepository } from '../../src/infrastructure/prisma/prisma-user.repository';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
-import { runSeed } from '../../prisma/seed';
+import { runSeed, runSeedCli } from '../../prisma/seed';
 import { cleanDatabase, createPrismaService } from './support/prisma-test-context';
 
 const PASSWORD = 'a very long admin password';
@@ -27,7 +27,7 @@ describe('admin seed (Postgres)', () => {
 
   it('creates an active admin whose password verifies with the real hasher', async () => {
     const result = await runSeed(env(), prisma);
-    expect(result).toEqual({ created: true });
+    expect(result).toEqual({ created: true, state: 'created' });
     const admin = await users.findByEmail(Email.create('admin@example.com'));
     expect(admin?.role).toBe('A');
     expect(admin?.active).toBe(true);
@@ -39,7 +39,7 @@ describe('admin seed (Postgres)', () => {
     await runSeed(env(), prisma);
     const before = await users.findByEmail(Email.create('admin@example.com'));
     const again = await runSeed(env({ ADMIN_PASSWORD: 'a different long password' }), prisma);
-    expect(again).toEqual({ created: false });
+    expect(again).toEqual({ created: false, state: 'admin-exists' });
     const after = await users.findByEmail(Email.create('admin@example.com'));
     expect(after?.passwordHash).toBe(before?.passwordHash);
     expect(await prisma.client.user.count()).toBe(1);
@@ -55,7 +55,7 @@ describe('admin seed (Postgres)', () => {
         role: 'N',
       }),
     );
-    expect(await runSeed(env(), prisma)).toEqual({ created: false });
+    expect(await runSeed(env(), prisma)).toEqual({ created: false, state: 'not-admin' });
     expect((await users.findById('n1'))?.role).toBe('N');
   });
 
@@ -84,5 +84,44 @@ describe('admin seed (Postgres)', () => {
     } finally {
       spies.forEach((s) => s.mockRestore());
     }
+  });
+
+  describe('command line outcome', () => {
+    const capture = () => {
+      const out: string[] = [];
+      return { out, log: (m: string) => out.push(m) };
+    };
+
+    it('exits 0 and says nothing changed for an active admin', async () => {
+      await runSeed(env(), prisma);
+      const { out, log } = capture();
+      expect(await runSeedCli(env(), prisma, log)).toBe(0);
+      expect(out.join('\n')).toContain('nothing changed');
+    });
+
+    it('exits non-zero, warns and never promotes an existing normal user', async () => {
+      await users.save(
+        User.create({
+          id: 'n1',
+          name: 'Normal',
+          email: Email.create('admin@example.com'),
+          passwordHash: 'h',
+          role: 'N',
+        }),
+      );
+      const { out, log } = capture();
+      expect(await runSeedCli(env(), prisma, log)).not.toBe(0);
+      expect(out.join('\n')).toContain(
+        'Account exists but is not an active admin; promote it manually',
+      );
+      expect(out.join('\n')).not.toContain(PASSWORD);
+      expect((await users.findById('n1'))?.role).toBe('N');
+    });
+
+    it('exits 0 when the admin is created', async () => {
+      const { out, log } = capture();
+      expect(await runSeedCli(env(), prisma, log)).toBe(0);
+      expect(out.join('\n')).toContain('Admin created');
+    });
   });
 });

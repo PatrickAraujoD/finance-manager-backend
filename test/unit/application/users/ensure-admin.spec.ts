@@ -18,7 +18,7 @@ describe('EnsureAdmin', () => {
   it('creates an active admin with a hashed password', async () => {
     const { users, useCase } = setup();
     const result = await useCase.execute({ email: ' Root@X.com ', password: PASSWORD });
-    expect(result.created).toBe(true);
+    expect(result).toEqual({ created: true, state: 'created' });
     const user = await users.findByEmail(Email.create('root@x.com'));
     expect(user?.role).toBe('A');
     expect(user?.active).toBe(true);
@@ -30,7 +30,7 @@ describe('EnsureAdmin', () => {
     await useCase.execute({ email: 'root@x.com', password: PASSWORD });
     const before = await users.findByEmail(Email.create('root@x.com'));
     const again = await useCase.execute({ email: 'ROOT@x.com', password: 'another long password' });
-    expect(again.created).toBe(false);
+    expect(again).toEqual({ created: false, state: 'admin-exists' });
     const after = await users.findByEmail(Email.create('root@x.com'));
     expect(after?.passwordHash).toBe(before?.passwordHash);
     expect(await users.list()).toHaveLength(1);
@@ -48,8 +48,25 @@ describe('EnsureAdmin', () => {
       }),
     );
     const result = await useCase.execute({ email: 'root@x.com', password: PASSWORD });
-    expect(result.created).toBe(false);
+    expect(result).toEqual({ created: false, state: 'not-admin' });
     expect((await users.findById('n1'))?.role).toBe('N');
+  });
+
+  it('reports an inactive admin as not an active admin and does not reactivate it', async () => {
+    const { users, useCase } = setup();
+    await users.save(
+      User.create({
+        id: 'a1',
+        name: 'Old admin',
+        email: Email.create('root@x.com'),
+        passwordHash: 'h',
+        role: 'A',
+        active: false,
+      }),
+    );
+    const result = await useCase.execute({ email: 'root@x.com', password: PASSWORD });
+    expect(result).toEqual({ created: false, state: 'not-admin' });
+    expect((await users.findById('a1'))?.active).toBe(false);
   });
 
   it('applies the same password rules as registration (12 to 128 characters)', async () => {
