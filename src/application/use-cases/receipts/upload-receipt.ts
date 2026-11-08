@@ -7,15 +7,10 @@ import { FileTypeDetector } from '../../ports/file-type-detector';
 import { IdGenerator } from '../../ports/id-generator';
 import { ReceiptExtractor } from '../../ports/receipt-extractor';
 import { ReceiptRepository } from '../../ports/receipt-repository';
+import { RECEIPT_EXTENSIONS } from './receipt-types';
 
 export const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 const DEFAULT_EXTRACTION_TIMEOUT_MS = 45_000;
-
-const EXTENSIONS: Record<string, string> = {
-  'application/pdf': 'pdf',
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-};
 
 export interface UploadReceiptInput {
   file: Buffer;
@@ -72,7 +67,7 @@ export class UploadReceipt {
     const { file, mimeType } = input;
     if (file.length === 0) throw new ValidationError('The file is empty');
     if (file.length > MAX_RECEIPT_BYTES) throw new ValidationError('The file exceeds 5 MB');
-    const ext = EXTENSIONS[mimeType];
+    const ext = RECEIPT_EXTENSIONS[mimeType];
     if (ext === undefined) throw new ValidationError('Only PDF, PNG and JPEG are accepted');
     const real = await this.fileTypes.detect(file);
     if (real !== mimeType) throw new ValidationError('The file content does not match its type');
