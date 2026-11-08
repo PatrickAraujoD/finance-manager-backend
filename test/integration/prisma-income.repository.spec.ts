@@ -118,4 +118,15 @@ describe('PrismaIncomeRepository (Postgres)', () => {
     await prisma.client.user.delete({ where: { id: 'u1' } });
     expect(await prisma.client.monthlyIncome.count()).toBe(0);
   });
+
+  it('rejects an income above the ceiling in the database itself (CHECK)', async () => {
+    const insert = (month: string, cents: number) =>
+      prisma.client.$executeRawUnsafe(
+        `INSERT INTO "MonthlyIncome" ("userId","month","amountCents","updatedAt")
+         VALUES ('u1','${month}',${cents},now())`,
+      );
+    await expect(insert('2026-01', 100_000_000_000)).resolves.toBe(1);
+    await expect(insert('2026-02', 100_000_000_001)).rejects.toThrow();
+    await expect(insert('2026-03', 9007199254740993)).rejects.toThrow();
+  });
 });

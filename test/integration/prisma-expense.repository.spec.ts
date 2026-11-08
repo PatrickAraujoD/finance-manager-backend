@@ -281,13 +281,37 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       expect((await repo.findById('u1', 'big'))?.amount.cents).toBe(1_000_000_000);
     });
 
+    it('rejects an amount above the ceiling in the database itself (CHECK)', async () => {
+      const insert = (id: string, cents: number) =>
+        prisma.client.$executeRawUnsafe(
+          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
+           VALUES ('${id}','u1','c1',${cents},true,'2026-11-01')`,
+        );
+      await expect(insert('at-ceiling', 1_000_000_000)).resolves.toBe(1);
+      await expect(insert('over-ceiling', 1_000_000_001)).rejects.toThrow();
+      await expect(insert('way-over', 9007199254740993)).rejects.toThrow();
+    });
+
     it('fails loudly (never rounds) for a stored value beyond the safe integer range', async () => {
+      // Only reachable behind the domain's back: lift the ceiling for this one row.
       await prisma.client.$executeRawUnsafe(
-        `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-         VALUES ('huge','u1','c1',9007199254740993,true,'2026-11-01')`,
+        'ALTER TABLE "Expense" DROP CONSTRAINT "Expense_amountCents_max"',
       );
-      await expect(repo.findById('u1', 'huge')).rejects.toThrow(/safe integer/);
-      await expect(repo.listByUser('u1', {})).rejects.toThrow(/safe integer/);
+      try {
+        await prisma.client.$executeRawUnsafe(
+          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
+           VALUES ('huge','u1','c1',9007199254740993,true,'2026-11-01')`,
+        );
+        await expect(repo.findById('u1', 'huge')).rejects.toThrow(/safe integer/);
+        await expect(repo.listByUser('u1', {})).rejects.toThrow(/safe integer/);
+        // The row id is for the operator's log only: it is in the error message.
+        await expect(repo.findById('u1', 'huge')).rejects.toThrow(/huge/);
+      } finally {
+        await prisma.client.$executeRawUnsafe(`DELETE FROM "Expense" WHERE "id" = 'huge'`);
+        await prisma.client.$executeRawUnsafe(
+          'ALTER TABLE "Expense" ADD CONSTRAINT "Expense_amountCents_max" CHECK ("amountCents" <= 1000000000)',
+        );
+      }
     });
   });
 
