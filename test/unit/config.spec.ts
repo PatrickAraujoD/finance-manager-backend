@@ -28,4 +28,45 @@ describe('loadConfig', () => {
       port: 3000,
     });
   });
+
+  it('defaults the HTTP hardening options', () => {
+    expect(loadConfig(valid)).toMatchObject({
+      corsOrigins: [],
+      trustProxy: false,
+      throttleTtlSeconds: 60,
+      throttleLimit: 100,
+      authThrottleLimit: 5,
+    });
+  });
+
+  it('parses a comma separated CORS_ORIGINS list', () => {
+    const config = loadConfig({
+      ...valid,
+      CORS_ORIGINS: ' https://a.example.com, https://b.example.com ,',
+    });
+    expect(config.corsOrigins).toEqual(['https://a.example.com', 'https://b.example.com']);
+  });
+
+  it.each([
+    ['false', false],
+    ['true', true],
+    ['1', 1],
+    ['2', 2],
+  ])('parses TRUST_PROXY=%s', (raw, expected) => {
+    expect(loadConfig({ ...valid, TRUST_PROXY: raw }).trustProxy).toBe(expected);
+  });
+
+  it('rejects an invalid TRUST_PROXY', () => {
+    expect(() => loadConfig({ ...valid, TRUST_PROXY: 'loopback' })).toThrow('TRUST_PROXY');
+  });
+
+  it('reads the throttle limits', () => {
+    const config = loadConfig({
+      ...valid,
+      THROTTLE_TTL_SECONDS: '30',
+      THROTTLE_LIMIT: '10',
+      AUTH_THROTTLE_LIMIT: '2',
+    });
+    expect(config).toMatchObject({ throttleTtlSeconds: 30, throttleLimit: 10, authThrottleLimit: 2 });
+  });
 });
