@@ -76,6 +76,11 @@ describe('public route inventory', () => {
         'GET /income/:month',
         'POST /receipts',
         'GET /receipts/:id/file',
+        'POST /expenses',
+        'GET /expenses',
+        'GET /expenses/:id',
+        'PATCH /expenses/:id',
+        'DELETE /expenses/:id',
       ]),
     );
   });
