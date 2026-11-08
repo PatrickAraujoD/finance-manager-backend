@@ -4,6 +4,7 @@ import { Clock } from '../../../application/ports/clock';
 import { IdGenerator } from '../../../application/ports/id-generator';
 import { Argon2Hasher } from '../../../infrastructure/hashing/argon2-hasher';
 import { PrismaCategoryRepository } from '../../../infrastructure/prisma/prisma-category.repository';
+import { PrismaIncomeRepository } from '../../../infrastructure/prisma/prisma-income.repository';
 import { PrismaRefreshTokenRepository } from '../../../infrastructure/prisma/prisma-refresh-token.repository';
 import { PrismaUserRepository } from '../../../infrastructure/prisma/prisma-user.repository';
 import { JwtTokenService } from '../../../infrastructure/tokens/jwt-token-service';
@@ -14,6 +15,7 @@ import {
   CATEGORY_REPOSITORY,
   CLOCK,
   ID_GENERATOR,
+  INCOME_REPOSITORY,
   PASSWORD_HASHER,
   REFRESH_TOKEN_REPOSITORY,
   TOKEN_SERVICE,
@@ -52,6 +54,11 @@ export class CoreModule {
           useFactory: (prisma: NestPrismaService) => new PrismaCategoryRepository(prisma),
         },
         {
+          provide: INCOME_REPOSITORY,
+          inject: [NestPrismaService],
+          useFactory: (prisma: NestPrismaService) => new PrismaIncomeRepository(prisma),
+        },
+        {
           provide: REFRESH_TOKEN_REPOSITORY,
           inject: [NestPrismaService],
           useFactory: (prisma: NestPrismaService) => new PrismaRefreshTokenRepository(prisma),
@@ -65,6 +72,7 @@ export class CoreModule {
         TOKEN_SERVICE,
         USER_REPOSITORY,
         CATEGORY_REPOSITORY,
+        INCOME_REPOSITORY,
         REFRESH_TOKEN_REPOSITORY,
       ],
     };

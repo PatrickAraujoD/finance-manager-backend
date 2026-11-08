@@ -6,3 +6,4 @@ export const TOKEN_SERVICE = Symbol('TOKEN_SERVICE');
 export const CLOCK = Symbol('CLOCK');
 export const ID_GENERATOR = Symbol('ID_GENERATOR');
 export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');
+export const INCOME_REPOSITORY = Symbol('INCOME_REPOSITORY');

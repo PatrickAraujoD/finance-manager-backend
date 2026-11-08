@@ -13,6 +13,7 @@ import { loginThrottleKey } from '../login-throttle-key';
 import { AuthModule } from './auth.module';
 import { CategoriesModule } from './categories.module';
 import { CoreModule } from './core.module';
+import { IncomeModule } from './income.module';
 import { UsersModule } from './users.module';
 
 @Module({})
@@ -26,6 +27,7 @@ export class AppModule {
         AuthModule,
         UsersModule,
         CategoriesModule,
+        IncomeModule,
         ThrottlerModule.forRoot({
           throttlers: [
             { name: 'default', ttl, limit: config.throttleLimit },
