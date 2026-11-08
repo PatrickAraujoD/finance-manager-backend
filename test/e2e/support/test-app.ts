@@ -58,5 +58,5 @@ export async function startApp(
 }
 
 export async function cleanTables(prisma: PrismaService): Promise<void> {
-  await prisma.client.$executeRawUnsafe('TRUNCATE TABLE "RefreshToken", "User" CASCADE');
+  await prisma.client.$executeRawUnsafe('TRUNCATE TABLE "Expense", "Category", "RefreshToken", "User" CASCADE');
 }

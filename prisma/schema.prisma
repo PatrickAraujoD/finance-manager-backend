@@ -24,6 +24,8 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
+  categories    Category[]
+  expenses      Expense[]
 }
 
 model RefreshToken {
@@ -37,4 +39,41 @@ model RefreshToken {
 
   @@index([familyId])
   @@index([userId])
+}
+
+model Category {
+  id        String    @id
+  name      String
+  // Normalized name (Unicode NFC, lowercase) computed by the domain: case-insensitive uniqueness.
+  nameKey   String
+  // NULL = global category. UNIQUE(ownerId, nameKey) does not cover NULL owners in Postgres, so
+  // globals get a partial unique index added by SQL in the migration.
+  ownerId   String?
+  createdAt DateTime  @default(now())
+  owner     User?     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  expenses  Expense[]
+
+  @@unique([ownerId, nameKey])
+}
+
+// Only the schema for now (the repository comes with the expenses task); it makes the category
+// "in use" check and the delete restriction real.
+model Expense {
+  id          String   @id
+  userId      String
+  categoryId  String
+  // Plain column until the Receipt table exists.
+  receiptId   String?
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents BigInt
+  paidAlone   Boolean
+  // Calendar date (no time zone).
+  spentAt     DateTime @db.Date
+  description String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, spentAt])
+  @@index([categoryId])
 }

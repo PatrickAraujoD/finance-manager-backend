@@ -6,5 +6,5 @@ export function createPrismaService(): PrismaService {
 }
 
 export async function cleanDatabase(prisma: PrismaService): Promise<void> {
-  await prisma.client.$executeRawUnsafe('TRUNCATE TABLE "RefreshToken", "User" CASCADE');
+  await prisma.client.$executeRawUnsafe('TRUNCATE TABLE "Expense", "Category", "RefreshToken", "User" CASCADE');
 }
