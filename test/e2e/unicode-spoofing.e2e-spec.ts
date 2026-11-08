@@ -118,6 +118,50 @@ describe('invisible and spoofing Unicode', () => {
     });
   });
 
+  describe('ZWNJ between letters of non Latin scripts', () => {
+    const ZWNJ = '\u200c';
+    const accepted = [
+      ['Persian', 'می‌خواهم'],
+      ['Urdu', 'ہم‌سفر'],
+      ['Malayalam', 'ക്‌ഷ'],
+      ['Hindi', 'क्‌ष'],
+    ];
+    const rejected = [
+      ['Latin', `fo${ZWNJ}od`],
+      ['Cyrillic', `до${ZWNJ}ма`],
+      ['start', `${ZWNJ}می`],
+      ['end', `می${ZWNJ}`],
+      ['doubled', `می${ZWNJ}${ZWNJ}خ`],
+    ];
+
+    it.each(accepted)('registration accepts %s', async (_n, text) => {
+      expect((await register(text, 'zw@example.com')).status).toBe(201);
+    });
+    it.each(accepted)('category accepts %s', async (_n, text) => {
+      const res = await category(text);
+      expect(res.status).toBe(201);
+      const stored = await t.prisma.client.category.findUnique({ where: { id: res.body.id } });
+      expect(stored?.name).toBe(text);
+    });
+    it.each(accepted)('description accepts %s', async (_n, text) => {
+      expect((await expenseWith(`pago: ${text}`)).status).toBe(201);
+    });
+
+    it.each(rejected)('registration rejects %s', async (_n, text) => {
+      expect((await register(text, 'zw@example.com')).status).toBe(400);
+    });
+    it.each(rejected)('category rejects %s', async (_n, text) => {
+      expect((await category(text)).status).toBe(400);
+    });
+    it.each(rejected)('description rejects %s', async (_n, text) => {
+      expect((await expenseWith(text)).status).toBe(400);
+    });
+
+    it('still rejects ZWNJ in the e-mail', async () => {
+      expect((await register('Bia', `می${ZWNJ}خ@example.com`)).status).toBe(400);
+    });
+  });
+
   describe('registration password', () => {
     it('accepts invisible Unicode (only controls are refused)', async () => {
       const res = await register('Caio', 'caio@example.com', `pass\u200bword\u202e long enough`);

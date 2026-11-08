@@ -117,3 +117,56 @@ describe('hasUnsafeText kinds', () => {
     expect(() => requireCleanText('a\u2028b', 'f')).toThrow(ValidationError);
   });
 });
+
+describe('ZWNJ (U+200C) in names and descriptions', () => {
+  const ZWNJ = '‌';
+  const accepted: [string, string][] = [
+    ['Persian', 'می‌خواهم'],
+    ['Persian half space', 'نیم‌فاصله'],
+    ['Urdu', 'ہم‌سفر'],
+    ['Malayalam chillu', 'ക്‌ഷ'],
+    ['Hindi (virama + ZWNJ)', 'क्‌ष'],
+    ['Persian with a diacritic before it', 'مَ‌ن'],
+  ];
+  const rejected: [string, string][] = [
+    ['Latin letters', `fo${ZWNJ}od`],
+    ['Cyrillic letters', `до${ZWNJ}ма`],
+    ['Greek letters', `αβ${ZWNJ}γδ`],
+    ['Latin with a combining accent before it', `é${ZWNJ}x`],
+    ['Persian then Latin', `می${ZWNJ}x`],
+    ['Latin then Persian', `x${ZWNJ}می`],
+    ['the start', `${ZWNJ}می`],
+    ['the end', `می${ZWNJ}`],
+    ['a doubled ZWNJ', `می${ZWNJ}${ZWNJ}خ`],
+    ['a space next to it', `می ${ZWNJ}خ`],
+    ['a digit next to it', `می${ZWNJ}1`],
+    ['only a ZWNJ', ZWNJ],
+  ];
+
+  it.each(accepted)('names accept %s', (_n, text) => {
+    expect(User.create({ ...user, name: text }).name).toBe(text);
+    expect(Category.create({ id: 'c1', name: text, ownerId: null }).name).toBe(text);
+  });
+
+  it.each(accepted)('descriptions accept %s', (_n, text) => {
+    expect(() => Expense.create({ ...expense, description: `a ${text}\nb` })).not.toThrow();
+  });
+
+  it.each(rejected)('names reject ZWNJ at %s', (_n, text) => {
+    expect(() => User.create({ ...user, name: text })).toThrow(ValidationError);
+    expect(() => Category.create({ id: 'c1', name: text, ownerId: null })).toThrow(ValidationError);
+  });
+
+  it.each(rejected)('descriptions reject ZWNJ at %s', (_n, text) => {
+    expect(() => Expense.create({ ...expense, description: text })).toThrow(ValidationError);
+  });
+
+  it('keeps rejecting ZWNJ in the e-mail, even between Persian letters', () => {
+    expect(() => Email.create(`می${ZWNJ}خ@x.com`)).toThrow(ValidationError);
+  });
+
+  it('keeps the strict kind and the password rule unchanged', () => {
+    expect(hasUnsafeText(`می${ZWNJ}خ`)).toBe(true);
+    expect(hasUnsafeText(`fo${ZWNJ}od`, { kind: 'password' })).toBe(false);
+  });
+});
