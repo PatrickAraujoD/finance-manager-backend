@@ -20,6 +20,9 @@ import {
 
 interface HttpResponse {
   status(code: number): { json(body: unknown): void };
+  headersSent?: boolean;
+  writableEnded?: boolean;
+  socket?: { destroyed?: boolean } | null;
 }
 
 interface ErrorBody {
@@ -58,6 +61,8 @@ export class DomainErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const res = host.switchToHttp().getResponse<HttpResponse>();
     const { status, payload } = this.translate(exception);
+    // After an abort the socket is gone (or the response already went out): nothing to write.
+    if (res.headersSent || res.writableEnded || res.socket?.destroyed) return;
     res.status(status).json(payload);
   }
 
@@ -90,6 +95,11 @@ export class DomainErrorFilter implements ExceptionFilter {
       const status = e.getStatus();
       return { status, payload: body(status) };
     }
+    if (isRequestAborted(e)) {
+      // The client went away mid-upload: not a server fault, so no stack and no ERROR.
+      this.logger.warn('Request aborted by the client');
+      return { status: 400, payload: body(400) };
+    }
     if (isBodyParserError(e)) {
       const status = e.status === 413 ? 413 : 400;
       return { status, payload: body(status) };
@@ -98,6 +108,11 @@ export class DomainErrorFilter implements ExceptionFilter {
     if (!(e instanceof DomainError)) this.logger.error(e instanceof Error ? e.stack : String(e));
     return { status: HttpStatus.INTERNAL_SERVER_ERROR, payload: body(500) };
   }
+}
+
+/** multer raises a plain `Error('Request aborted')` (not a MulterError) when the client hangs up. */
+function isRequestAborted(e: unknown): boolean {
+  return e instanceof Error && e.message === 'Request aborted';
 }
 
 function isBodyParserError(e: unknown): e is { status: number } {
