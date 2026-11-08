@@ -5,11 +5,12 @@
  * unhandled error in a worker would kill this child with a non-zero exit code.
  */
 import { readFileSync } from 'node:fs';
+import { ReceiptExtractor } from '../../../../src/application/ports/receipt-extractor';
 import { PdfTextExtractor } from '../../../../src/infrastructure/extraction/pdf-text-extractor';
 import { TesseractImageExtractor } from '../../../../src/infrastructure/extraction/tesseract-image-extractor';
 
 const [kind, file] = process.argv.slice(2);
-const extractor = kind === 'pdf' ? new PdfTextExtractor() : new TesseractImageExtractor();
+const extractor: ReceiptExtractor = kind === 'pdf' ? new PdfTextExtractor() : new TesseractImageExtractor();
 
 extractor
   .extract(readFileSync(file), kind === 'pdf' ? 'application/pdf' : 'image/png')
