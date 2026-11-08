@@ -147,6 +147,15 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - [ ] **Step 2:** Rodar e ver falhar; implementar os casos de uso; verde.
 - [ ] **Step 3:** Adaptadores: `Argon2Hasher` (argon2id), `JwtTokenService` (access 15 min; refresh = 48 bytes aleatórios via `crypto.randomBytes`, hash SHA-256 salvo), repositórios Prisma + migration (`User`, `RefreshToken`). Teste de integração do repositório contra o Postgres do Compose.
 - [ ] **Step 4:** Controller + DTOs (class-validator, whitelist, `forbidNonWhitelisted`), guards, filtro de erros; throttler global e limite mais baixo em `/auth/*`; `helmet`. E2E: registrar → login → rota protegida 200; sem token 401; token expirado 401; 6ª tentativa seguida de login em 1 min → 429.
+
+**Requisitos da Parte B (revisão de segurança da Parte A):**
+- Rotação do refresh com `revokeIfActive`; revogar + emitir o novo token na mesma transação (se a emissão falhar, a sessão não se perde).
+- `UserRepository.mutate` com transação e lock de linha (`SELECT ... FOR UPDATE`) no Prisma; teste de integração de concorrência contra o Postgres.
+- Índice UNIQUE em `email` (P2002 -> `ConflictError`); índices em `tokenHash` (unique), `familyId` e `userId`; `revokeFamily`/`revokeAllByUser` com `updateMany ... WHERE revokedAt IS NULL`.
+- Throttler (rate limit por IP) em `/auth/login`, `/auth/register` e `/auth/refresh`; DTO de login com senha de no máximo 128 caracteres e limite de tamanho do body.
+- O guard JWT usa `JwtTokenService.verifyAccess` (não `@nestjs/jwt` com config própria) e rejeita usuário inativo (consulta o repositório).
+- `.env.example` instrui gerar segredos com `openssl rand -base64 48`.
+
 - [ ] **Step 5:** Commit `feat(auth): register, login, refresh rotation, logout`.
 
 ### Task 5: Usuários (admin) e Categorias
