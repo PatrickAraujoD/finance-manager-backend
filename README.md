@@ -45,41 +45,278 @@ node scripts/check-secrets.js       # falha se um .env ou segredo obvio estiver 
 
 ## Endpoints
 
-Tudo e privado (Bearer access token, 15 min) a menos que a coluna Papel diga `publico`. Erros
-tem sempre o formato `{statusCode, error, message}`; recursos de outro usuario respondem 404
-identico ao inexistente.
+A API tem 25 rotas, todas em JSON (exceto o upload `multipart/form-data` e o download do
+comprovante). Esta secao e a referencia completa: o que cada rota faz, o que ela recebe e o que
+devolve.
 
-| Metodo | Rota | Papel | Descricao |
+### Regras que valem para todas as rotas
+
+- **Autenticacao.** Todas as rotas sao privadas e exigem `Authorization: Bearer <accessToken>`,
+  exceto as cinco marcadas como `publico` (`/health` e quatro de `/auth`). O access token vale 15
+  minutos; renove-o com `POST /auth/refresh`. Uma rota nova nasce privada (guard global); um teste
+  e2e (`authorization-matrix`) lista as rotas registradas e quebra se alguma nao for declarada.
+- **Papeis.** `N` (usuario normal) e `A` (admin). O admin tambem usa o sistema para os proprios
+  gastos, mas **nao le gastos, comprovantes nem salario de outros usuarios**: ele so gerencia
+  contas (`/users`) e categorias globais.
+- **Dono do dado.** Nao existe id de usuario nas rotas. O dono vem sempre do token. Um recurso de
+  outro usuario (gasto, comprovante, categoria privada) responde **404 identico** ao de um recurso
+  inexistente, para nao revelar o que existe.
+- **Dinheiro.** Sempre em **centavos, como numero inteiro** (`1234` = R$ 12,34), nunca decimal.
+- **Datas e meses.** Datas no formato `YYYY-MM-DD` e meses em `YYYY-MM`, no calendario UTC; o ano
+  vai de 1900 a 9998.
+- **Corpo estrito.** Campos que nao existem na rota sao recusados com 400 (nada de `userId`, `role`
+  ou `id` "de contrabando").
+- **Erros.** Sempre `{"statusCode": 400, "error": "Bad Request", "message": ...}`, sem stack nem
+  detalhes internos. Codigos: 400 entrada invalida, 401 sem sessao valida, 403 sem permissao,
+  404 nao encontrado, 409 conflito, 413 corpo grande demais, 429 limite de requisicoes.
+- **Respostas** saem com `Cache-Control: no-store` e sem `ETag`.
+
+### Indice
+
+| Metodo | Rota | Acesso | Para que serve |
 |---|---|---|---|
-| GET | `/health` | publico | Liveness |
-| POST | `/auth/register` | publico | Cria usuario normal (`name`, `email`, `password`) |
-| POST | `/auth/login` | publico | Devolve `accessToken` e `refreshToken` |
-| POST | `/auth/refresh` | publico | Rotaciona o refresh token (reuso revoga a familia) |
-| POST | `/auth/logout` | publico | Revoga a sessao do refresh token (idempotente) |
-| GET | `/auth/me` | N, A | Perfil do usuario autenticado |
-| GET | `/users` | A | Lista usuarios |
-| PATCH | `/users/:id` | A | Muda `role` e/ou `active` (desativar encerra as sessoes) |
-| GET | `/categories` | N, A | Categorias globais e proprias |
-| POST | `/categories` | N, A | Cria categoria propria; `global: true` so admin |
-| PATCH | `/categories/:id` | N, A | Renomeia a propria (global so admin) |
-| DELETE | `/categories/:id` | N, A | Exclui; 409 se houver gastos nela |
-| PUT | `/income/:month` | N, A | Define o salario do mes (`YYYY-MM`, centavos) |
-| GET | `/income/:month` | N, A | Le o salario do mes (404 se nao cadastrado) |
-| POST | `/receipts` | N, A | Upload multipart (PDF/PNG/JPEG, 5 MiB); devolve valor sugerido |
-| GET | `/receipts/:id/file` | N, A | Baixa o proprio comprovante |
-| POST | `/expenses` | N, A | Cria gasto com o valor confirmado pelo usuario |
-| GET | `/expenses` | N, A | Lista paginada com filtros `from`, `to`, `categoryId` |
-| GET | `/expenses/:id` | N, A | Le um gasto proprio |
-| PATCH | `/expenses/:id` | N, A | Altera um gasto proprio |
-| DELETE | `/expenses/:id` | N, A | Exclui um gasto proprio |
-| GET | `/reports/by-category` | N, A | Para onde vai o dinheiro (percentuais somam 100) |
-| GET | `/reports/by-day` | N, A | Total por dia e `topDay` |
-| GET | `/reports/monthly-evolution` | N, A | Evolucao mensal (ate 24 meses) |
-| GET | `/reports/income-vs-spent` | N, A | Salario x gasto do mes |
+| GET | `/health` | publico | Saber se a API esta no ar |
+| POST | `/auth/register` | publico | Criar uma conta de usuario normal |
+| POST | `/auth/login` | publico | Entrar e receber os tokens |
+| POST | `/auth/refresh` | publico | Trocar o refresh token por um par novo |
+| POST | `/auth/logout` | publico | Encerrar a sessao |
+| GET | `/auth/me` | N, A | Ver o proprio perfil |
+| GET | `/users` | A | Listar os usuarios do sistema |
+| PATCH | `/users/:id` | A | Mudar papel ou ativar/desativar um usuario |
+| GET | `/categories` | N, A | Listar categorias (globais + proprias) |
+| POST | `/categories` | N, A | Criar categoria propria (ou global, se admin) |
+| PATCH | `/categories/:id` | N, A | Renomear uma categoria |
+| DELETE | `/categories/:id` | N, A | Excluir uma categoria sem gastos |
+| PUT | `/income/:month` | N, A | Informar o salario do mes |
+| GET | `/income/:month` | N, A | Consultar o salario do mes |
+| POST | `/receipts` | N, A | Enviar um comprovante e receber o valor sugerido |
+| GET | `/receipts/:id/file` | N, A | Baixar um comprovante proprio |
+| POST | `/expenses` | N, A | Registrar um gasto |
+| GET | `/expenses` | N, A | Listar gastos com filtros e paginacao |
+| GET | `/expenses/:id` | N, A | Ver um gasto |
+| PATCH | `/expenses/:id` | N, A | Corrigir um gasto |
+| DELETE | `/expenses/:id` | N, A | Excluir um gasto |
+| GET | `/reports/by-category` | N, A | Grafico: para onde vai o dinheiro |
+| GET | `/reports/by-day` | N, A | Grafico: gasto por dia e dia de maior gasto |
+| GET | `/reports/monthly-evolution` | N, A | Grafico: evolucao mes a mes |
+| GET | `/reports/income-vs-spent` | N, A | Quanto do salario ja foi gasto |
 
-Os detalhes de cada grupo estao nas secoes Comprovantes, Gastos e Relatorios abaixo. Um teste
-e2e (`authorization-matrix`) lista as rotas registradas e quebra se uma rota nova nao for
-declarada na matriz, o que obriga a decidir o papel e o isolamento de cada rota.
+### Saude
+
+**`GET /health`** (publico). Responde `200 {"status":"ok"}`. Serve para monitoramento e para o
+`HEALTHCHECK` do Docker. Nao toca no banco.
+
+### Autenticacao (`/auth`)
+
+Fluxo tipico: `register` -> `login` -> usar o `accessToken` -> quando expirar, `refresh` -> ao sair,
+`logout`.
+
+**`POST /auth/register`** (publico). Cria uma conta de usuario normal (`N`). Nunca cria admin: o
+primeiro admin vem do seed (ver "Primeiro admin").
+- Corpo: `name` (1 a 100 caracteres), `email` (valido, ate 254), `password` (12 a 128 caracteres).
+- Resposta: `201 {"id": "<uuid>"}`.
+- Erros: `400` dados invalidos ou campo extra (como `role`); `409` e-mail ja cadastrado (maiusculas
+  e minusculas contam como o mesmo e-mail); `429` muitas tentativas.
+
+**`POST /auth/login`** (publico). Autentica e devolve os dois tokens.
+- Corpo: `email`, `password`.
+- Resposta: `200 {"accessToken": "...", "refreshToken": "..."}`. O access token vale 15 minutos; o
+  refresh token e opaco e vale 7 dias.
+- Erros: `401` com **a mesma resposta** para e-mail inexistente, senha errada, conta desativada ou
+  conta bloqueada (ninguem descobre quais e-mails existem). Apos 5 senhas erradas a conta fica
+  bloqueada por 15 minutos. `429` por limite de tentativas (por IP, e por IP + e-mail).
+
+**`POST /auth/refresh`** (publico). Troca um refresh token por um par novo. O token antigo morre
+(rotacao).
+- Corpo: `refreshToken`.
+- Resposta: `200 {"accessToken": "...", "refreshToken": "..."}`.
+- Erros: `401` token invalido, expirado ou de usuario desativado. Se um token **ja usado** for
+  reapresentado, a sessao inteira e revogada (sinal de roubo de token).
+
+**`POST /auth/logout`** (publico). Encerra a sessao do refresh token informado.
+- Corpo: `refreshToken`.
+- Resposta: `204` sem corpo. E idempotente: um token desconhecido tambem responde `204`.
+
+**`GET /auth/me`** (N, A). Devolve o perfil de quem esta autenticado.
+- Resposta: `200 {"id", "name", "email", "role"}` (`role` e `"N"` ou `"A"`).
+
+### Usuarios (`/users`, so admin)
+
+Para o admin cuidar das contas. Usuario normal recebe `403`.
+
+**`GET /users`**. Lista os usuarios (ate 500, do mais antigo ao mais novo).
+- Resposta: `200 [{"id","name","email","role","active","createdAt"}]`. O hash da senha nunca sai.
+
+**`PATCH /users/:id`**. Muda o papel e/ou a situacao de um usuario.
+- Corpo: `role` (`"A"` ou `"N"`) e/ou `active` (booleano); ao menos um.
+- Resposta: `200` com o usuario atualizado (mesmo formato da lista).
+- Efeitos: **desativar** (`active: false`) derruba na hora todas as sessoes do usuario, mesmo que o
+  access token ainda nao tenha expirado.
+- Erros: `403` se o admin tentar rebaixar ou desativar a si mesmo; `409` se a mudanca deixaria o
+  sistema sem nenhum admin ativo; `404` usuario inexistente; `400` id invalido ou campo extra.
+
+### Categorias (`/categories`)
+
+Categorias classificam os gastos. Ha dois tipos: **globais** (criadas pelo admin, valem para todos)
+e **proprias** (de cada usuario, invisiveis para os outros).
+
+**`GET /categories`**. Lista as categorias que o usuario pode usar (globais + as proprias).
+- Resposta: `200 [{"id","name","global"}]`.
+
+**`POST /categories`**. Cria uma categoria.
+- Corpo: `name` (ate 60 caracteres) e, opcionalmente, `global: true` (so admin).
+- Resposta: `201 {"id": "<uuid>"}`.
+- Regras: o nome nao pode repetir no mesmo escopo, sem diferenciar maiusculas, acentos
+  compostos/decompostos ou espacos repetidos. Cada usuario pode ter no maximo 100 categorias
+  proprias.
+- Erros: `403` usuario normal pedindo `global: true`; `409` nome repetido ou limite de 100;
+  `400` dados invalidos.
+
+**`PATCH /categories/:id`**. Renomeia uma categoria.
+- Corpo: `name`.
+- Resposta: `200 {"id","name","global"}`.
+- Quem pode: o dono renomeia a propria; so admin renomeia uma global. Categoria privada de outro
+  usuario responde `404`, inclusive para o admin. Nao e possivel transformar uma categoria
+  privada em global nem mudar o dono. Renomear uma global vale para todos.
+
+**`DELETE /categories/:id`**. Exclui uma categoria.
+- Resposta: `204`.
+- Erros: `409` se ainda houver gastos usando a categoria (nada e apagado); `403` usuario normal
+  tentando excluir uma global; `404` nao encontrada ou de outro usuario.
+
+### Salario (`/income`)
+
+O salario do mes e a base do relatorio `income-vs-spent`. Cada usuario tem o seu, por mes.
+
+**`PUT /income/:month`**. Define (ou substitui) o salario de um mes. `:month` no formato `YYYY-MM`.
+- Corpo: `amountCents` (inteiro de 1 a 100000000000, em centavos).
+- Resposta: `200 {"month": "2026-11", "amountCents": 500000}`.
+- Erros: `400` mes invalido (`2026-13`, `2026-1`, ano fora de 1900 a 9998), valor zero, negativo,
+  decimal ou campo extra.
+
+**`GET /income/:month`**. Consulta o salario de um mes.
+- Resposta: `200 {"month","amountCents"}`; `404` se o mes nao tem salario cadastrado.
+
+### Comprovantes (`/receipts`)
+
+O usuario envia o comprovante de pagamento (PDF com texto ou imagem). O sistema **sugere** o valor
+lido do arquivo, e **o usuario sempre confirma ou corrige** ao criar o gasto: o valor sugerido
+nunca e salvo sozinho.
+
+**`POST /receipts`**. Recebe o arquivo e, se o usuario pagou sozinho, tenta ler o valor.
+- Corpo: `multipart/form-data` com `file` (PDF, PNG ou JPEG, ate 5 MiB, um so arquivo) e
+  `paidAlone` (texto `true` ou `false`, nada mais).
+  - `paidAlone=true`: o sistema le o valor do PDF (texto nativo) ou da imagem (OCR em portugues).
+  - `paidAlone=false` (gasto dividido): **nao ha leitura**; o arquivo so e guardado e o usuario
+    informa o valor que pagou ao criar o gasto.
+- Resposta: `201 {"receiptId": "<uuid>", "suggestedAmountCents": 12345}`. O valor sugerido e
+  `null` quando nao foi possivel ler com seguranca (o sistema prefere nao sugerir a sugerir um
+  valor errado); o upload continua valido e o usuario digita o valor.
+- Validacao: o tipo real e conferido pelos primeiros bytes do arquivo, nao pelo nome nem pelo
+  tipo informado. O nome enviado pelo cliente nunca e usado nem guardado.
+- Erros: `400` arquivo vazio, tipo nao aceito ou diferente do informado, `paidAlone` ausente ou
+  diferente de `true`/`false`, mais de um arquivo ou campo extra; `413` acima de 5 MiB; `429`
+  limite de uploads por usuario (10 por janela de 60 s, por padrao).
+
+**`GET /receipts/:id/file`**. Baixa o proprio comprovante.
+- Resposta: `200` com os bytes do arquivo, `Content-Type` do tipo gravado, `attachment` e `nosniff`.
+- Erros: `404` identico para comprovante inexistente, de outro usuario (admin incluso) ou cujo
+  arquivo sumiu do disco.
+
+### Gastos (`/expenses`)
+
+Um gasto tem categoria, valor, data e, opcionalmente, um comprovante e uma descricao.
+
+**`POST /expenses`**. Registra um gasto.
+- Corpo:
+  - `categoryId` (UUID de uma categoria global ou propria);
+  - `amountCents` (inteiro de 1 a 1000000000): **sempre o valor que o usuario confirmou ou
+    digitou**, mesmo quando ha comprovante e mesmo no gasto dividido (`paidAlone=false`);
+  - `paidAlone` (booleano): se pagou sozinho ou dividiu;
+  - `spentAt` (`YYYY-MM-DD`, data real do calendario, no maximo hoje + 1 dia em UTC);
+  - `receiptId` (opcional, UUID de comprovante proprio; sem ele e um lancamento manual);
+  - `description` (opcional, ate 500 caracteres).
+- Resposta: `201 {"id": "<uuid>"}`.
+- Erros: `404` categoria ou comprovante inexistente ou de outro usuario; `409` comprovante ja
+  usado por outro gasto (cada comprovante vale para um gasto); `400` valor, data ou campo
+  invalido, ou campo extra (`userId`, `id`, `createdAt`...).
+
+**`GET /expenses`**. Lista os gastos do usuario, do mais recente para o mais antigo.
+- Query (todas opcionais): `from` e `to` (`YYYY-MM-DD`, inclusivos, `from <= to`), `categoryId`
+  (UUID), `limit` (1 a 200, padrao 100), `offset` (0 a 100000).
+- Resposta: `200 {"items": [...], "total": 42, "limit": 100, "offset": 0}`.
+
+**`GET /expenses/:id`**. Devolve um gasto.
+- Resposta: `200 {"id","categoryId","receiptId","amountCents","paidAlone","spentAt","description","createdAt"}`.
+
+**`PATCH /expenses/:id`**. Corrige um gasto (parcial).
+- Corpo: ao menos um entre `categoryId`, `amountCents`, `spentAt`, `description`, `paidAlone`.
+  `receiptId` nao pode mudar (400).
+- Resposta: `200` com o gasto atualizado.
+
+**`DELETE /expenses/:id`**. Exclui um gasto.
+- Resposta: `204`. O comprovante e o arquivo continuam guardados e o comprovante volta a poder ser
+  usado em outro gasto.
+
+Em `GET`, `PATCH` e `DELETE`, um gasto inexistente ou de outro usuario responde `404`.
+
+### Relatorios (`/reports`)
+
+Quatro rotas `GET` que alimentam os graficos. Todas olham **so os gastos do proprio usuario** e
+somam no banco. Parametro ausente, repetido, desconhecido ou fora do formato responde `400`.
+Valores em centavos, inteiros.
+
+**`GET /reports/by-category?month=2026-11`**: "para onde vai o dinheiro". Total por categoria no
+mes, da maior para a menor. `percentage` tem 2 casas e a soma e exatamente 100. Mes sem gastos:
+`items: []` e `totalCents: 0`.
+
+```json
+{"month":"2026-11","totalCents":300,"items":[
+  {"categoryId":"…","categoryName":"Alimentacao","totalCents":200,"percentage":66.67},
+  {"categoryId":"…","categoryName":"Casa","totalCents":100,"percentage":33.33}]}
+```
+
+**`GET /reports/by-day?month=2026-11`**: "qual dia gastei mais". Total de cada dia que teve
+gasto, em ordem de data, e o `topDay` (dia de maior total; em empate, o mais antigo). Mes vazio:
+`days: []` e `topDay: null`.
+
+```json
+{"month":"2026-11","days":[{"date":"2026-11-02","totalCents":200},
+  {"date":"2026-11-10","totalCents":450}],"topDay":{"date":"2026-11-10","totalCents":450}}
+```
+
+**`GET /reports/monthly-evolution?from=2025-11&to=2026-02`**: evolucao mes a mes. Todos os meses
+do intervalo, com `0` nos meses sem gasto. `from <= to` e no maximo 24 meses (senao `400`).
+
+```json
+{"from":"2025-11","to":"2026-02","months":[{"month":"2025-11","totalCents":10},
+  {"month":"2025-12","totalCents":0},{"month":"2026-01","totalCents":40},
+  {"month":"2026-02","totalCents":0}]}
+```
+
+**`GET /reports/income-vs-spent?month=2026-11`**: quanto do salario ja foi gasto. Sem salario
+cadastrado, `incomeCents`, `remainingCents` e `percentSpent` vem `null`. `remainingCents` pode ser
+negativo e `percentSpent` pode passar de 100.
+
+```json
+{"month":"2026-11","incomeCents":500000,"spentCents":125000,"remainingCents":375000,
+ "percentSpent":25}
+```
+
+Os quatro relatorios fecham o mesmo total para o mesmo mes (soma dos dias = soma das categorias =
+`spentCents`).
+
+### Limites de requisicao
+
+| Onde | Limite padrao (por janela de 60 s) |
+|---|---|
+| Todas as rotas | 100 por IP |
+| `/auth/register`, `/auth/login`, `/auth/refresh` | 20 por IP |
+| `/auth/login` | 5 por IP + e-mail |
+| `POST /receipts` | 10 por usuario |
+
+Estouro responde `429`. Os valores e a janela (`THROTTLE_TTL_SECONDS`) sao configuraveis (ver
+"Variaveis de ambiente").
 
 ## Variaveis de ambiente
 
@@ -114,85 +351,6 @@ sensatos (valores absurdos derrubam a subida): `REQUEST_TIMEOUT_MS` (requisicao 
 passar de `REQUEST_TIMEOUT_MS`) e `KEEP_ALIVE_TIMEOUT_MS` (conexao ociosa, padrao 5000, 1000 a
 120000). Um cliente que abre a conexao e fica parado (slowloris) e desconectado dentro desses
 limites; um upload abortado pelo cliente e registrado como aviso curto, nao como erro.
-
-## Comprovantes
-
-`POST /receipts` (multipart/form-data): campo de arquivo `file` (PDF, PNG ou JPEG, ate 5 MiB) e
-campo de texto `paidAlone` (`true` ou `false`, nada mais). Responde 201 com
-`{receiptId, suggestedAmountCents}`; o valor e so uma sugestao (inteiro ou `null`). O arquivo e
-guardado em `UPLOAD_DIR` (diretorio privado, 0700) com nome gerado; o nome enviado pelo cliente
-nunca e usado. `GET /receipts/:id/file` so entrega ao dono (qualquer outro caso, admin incluso, e
-um 404 identico), com `Content-Type` vindo do banco, `nosniff`, `attachment` e `no-store`.
-
-## Gastos
-
-Todas as rotas exigem token e trabalham so com os gastos do proprio usuario (admin nao ve os de
-outros; gasto alheio e um 404 identico ao inexistente).
-
-- `POST /expenses` -> 201 `{id}`. Corpo: `categoryId` (UUID de categoria global ou propria),
-  `amountCents` (inteiro de 1 a 1000000000, SEMPRE o valor que o usuario confirmou, mesmo com
-  comprovante e mesmo com `paidAlone=false`), `paidAlone` (booleano), `spentAt` (`YYYY-MM-DD`,
-  data real, no maximo hoje + 1 dia em UTC), `receiptId` (opcional, UUID de comprovante proprio;
-  cada comprovante so pode ser usado por um gasto, senao 409) e `description` (opcional, ate 500
-  caracteres). Sem `receiptId` e um lancamento manual. Categoria ou comprovante de outro usuario
-  -> 404. Campos extras (`userId`, `id`, `createdAt`...) -> 400.
-- `GET /expenses?from=&to=&categoryId=&limit=&offset=` -> 200 `{items, total, limit, offset}`.
-  `from`/`to` inclusivos (`YYYY-MM-DD`, `from <= to`), `limit` 1 a 200 (padrao 100), `offset` 0 a
-  100000. Ordem: `spentAt` e `id` decrescentes.
-- `GET /expenses/:id`, `PATCH /expenses/:id` (parcial, ao menos um de `categoryId`, `amountCents`,
-  `spentAt`, `description`, `paidAlone`; `receiptId` e `userId` nao mudam e dao 400) e
-  `DELETE /expenses/:id` (204; o comprovante e o arquivo ficam, e o comprovante volta a poder ser
-  usado).
-- Resposta de um gasto: `id, categoryId, receiptId, amountCents, paidAlone, spentAt, description,
-  createdAt`. Excluir uma categoria usada por gastos responde 409 e nao apaga nada.
-
-## Relatorios
-
-Quatro rotas `GET`, todas privadas (token obrigatorio, throttle global) e escopadas ao proprio
-usuario: nao ha id de usuario na requisicao e o admin so ve os proprios dados. A query e estrita:
-mes ausente, formato diferente de `YYYY-MM`, ano fora de 1900 a 9998 (vale tambem para
-`PUT/GET /income/:month`), parametro repetido ou desconhecido -> 400. Valores em
-centavos sao inteiros JSON. Os meses/dias seguem o calendario UTC (`spentAt` e uma data).
-
-- `GET /reports/by-category?month=2026-11` ("para onde vai o dinheiro"): categorias ordenadas por
-  total decrescente (desempate por nome e id). `percentage` tem 2 casas e a soma e exatamente 100
-  (metodo do maior resto, em inteiros). Mes sem gastos: `items: []`, `totalCents: 0`.
-
-  ```json
-  {"month":"2026-11","totalCents":300,"items":[
-    {"categoryId":"…","categoryName":"Alimentacao","totalCents":200,"percentage":66.67},
-    {"categoryId":"…","categoryName":"Casa","totalCents":100,"percentage":33.33}]}
-  ```
-
-- `GET /reports/by-day?month=2026-11` ("qual dia gastou mais"): so dias com gasto, por data
-  crescente; `topDay` e o dia de maior total (empate: data mais antiga). Mes vazio: `days: []`,
-  `topDay: null`.
-
-  ```json
-  {"month":"2026-11","days":[{"date":"2026-11-02","totalCents":200},
-    {"date":"2026-11-10","totalCents":450}],"topDay":{"date":"2026-11-10","totalCents":450}}
-  ```
-
-- `GET /reports/monthly-evolution?from=2025-11&to=2026-02`: todos os meses do intervalo, com 0 nos
-  meses sem gasto. `from <= to` e no maximo 24 meses (senao 400).
-
-  ```json
-  {"from":"2025-11","to":"2026-02","months":[{"month":"2025-11","totalCents":10},
-    {"month":"2025-12","totalCents":0},{"month":"2026-01","totalCents":40},
-    {"month":"2026-02","totalCents":0}]}
-  ```
-
-- `GET /reports/income-vs-spent?month=2026-11`: sem salario cadastrado, `incomeCents`,
-  `remainingCents` e `percentSpent` sao `null`; `remainingCents` pode ser negativo e
-  `percentSpent` pode passar de 100 (2 casas, calculado com inteiros).
-
-  ```json
-  {"month":"2026-11","incomeCents":500000,"spentCents":125000,"remainingCents":375000,
-   "percentSpent":25}
-  ```
-
-Os totais vem de `GROUP BY` no Postgres (uma consulta por relatorio, usando o indice
-`(userId, spentAt)`); uma soma fora do inteiro seguro vira erro 500, nunca um numero arredondado.
 
 ## Primeiro admin
 
