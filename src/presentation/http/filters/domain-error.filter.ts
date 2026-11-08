@@ -68,8 +68,10 @@ export class DomainErrorFilter implements ExceptionFilter {
 
     if (e instanceof BadRequestException) {
       // Pipe errors list the failing constraints (property names only, never the values).
+      // Any other 400 (e.g. malformed JSON) gets the generic message: parser text is not for clients.
       const response = e.getResponse() as { message?: string | string[] };
-      return { status: 400, payload: body(400, response.message ?? reason(400)) };
+      const message = Array.isArray(response.message) ? response.message : reason(400);
+      return { status: 400, payload: body(400, message) };
     }
     if (e instanceof HttpException) {
       const status = e.getStatus();
