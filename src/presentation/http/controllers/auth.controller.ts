@@ -15,7 +15,7 @@ import { UnauthorizedError } from '../../../domain/errors';
 import { Role } from '../../../domain/role';
 import { AuthenticatedUser, CurrentUser } from '../decorators/current-user.decorator';
 import { Public } from '../decorators/public.decorator';
-import { StrictThrottle } from '../decorators/strict-throttle.decorator';
+import { LoginEmailThrottle, StrictThrottle } from '../decorators/strict-throttle.decorator';
 import { LoginDto, RefreshTokenDto, RegisterDto } from '../dtos/auth.dto';
 import { USER_REPOSITORY } from '../tokens';
 
@@ -40,6 +40,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   @StrictThrottle()
+  @LoginEmailThrottle()
   signIn(@Body() dto: LoginDto): Promise<{ accessToken: string; refreshToken: string }> {
     return this.login.execute(dto);
   }

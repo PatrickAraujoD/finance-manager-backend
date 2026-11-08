@@ -5,7 +5,11 @@ import { HealthController } from '../controllers/health.controller';
 import { AppConfig } from '../config';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
-import { STRICT_THROTTLE_KEY } from '../decorators/strict-throttle.decorator';
+import {
+  LOGIN_EMAIL_THROTTLE_KEY,
+  STRICT_THROTTLE_KEY,
+} from '../decorators/strict-throttle.decorator';
+import { loginThrottleKey } from '../login-throttle-key';
 import { AuthModule } from './auth.module';
 import { CoreModule } from './core.module';
 
@@ -27,6 +31,18 @@ export class AppModule {
               ttl,
               limit: config.authThrottleLimit,
               skipIf: (ctx) => !Reflect.getMetadata(STRICT_THROTTLE_KEY, ctx.getHandler()),
+            },
+            {
+              // Login only: IP + normalized email, so one account cannot be brute forced.
+              name: 'loginEmail',
+              ttl,
+              limit: config.loginEmailThrottleLimit,
+              skipIf: (ctx) => !Reflect.getMetadata(LOGIN_EMAIL_THROTTLE_KEY, ctx.getHandler()),
+              getTracker: (req) =>
+                loginThrottleKey(
+                  req.ip as string | undefined,
+                  (req.body as { email?: unknown } | undefined)?.email,
+                ),
             },
           ],
         }),
