@@ -10,7 +10,12 @@ saltos confiaveis, pois define o IP usado no rate limit),
 `THROTTLE_TTL_SECONDS`, `THROTTLE_LIMIT`, `AUTH_THROTTLE_LIMIT` (por IP, padrao 20),
 `LOGIN_EMAIL_THROTTLE_LIMIT` (login por IP + e-mail normalizado, padrao 5),
 `UPLOAD_THROTTLE_LIMIT` (uploads de comprovante por usuario autenticado na janela, padrao 10;
-sem token valido a chave e o IP).
+sem token valido a chave e o IP). Timeouts do servidor HTTP em milissegundos, com limites
+sensatos (valores absurdos derrubam a subida): `REQUEST_TIMEOUT_MS` (requisicao inteira, padrao
+60000, 1000 a 600000), `HEADERS_TIMEOUT_MS` (cabecalhos, padrao 20000, 1000 a 120000, nao pode
+passar de `REQUEST_TIMEOUT_MS`) e `KEEP_ALIVE_TIMEOUT_MS` (conexao ociosa, padrao 5000, 1000 a
+120000). Um cliente que abre a conexao e fica parado (slowloris) e desconectado dentro desses
+limites; um upload abortado pelo cliente e registrado como aviso curto, nao como erro.
 
 ## Comprovantes
 
