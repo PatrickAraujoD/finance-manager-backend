@@ -17,4 +17,6 @@ export interface TokenService {
   /** Throws UnauthorizedError when the token is invalid or expired. */
   verifyAccess(token: string): Promise<AccessTokenPayload>;
   generateRefresh(): RefreshTokenPair;
+  /** Hash of a refresh token presented by a client, for lookup. */
+  hashRefresh(token: string): string;
 }

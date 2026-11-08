@@ -19,6 +19,9 @@ export class FakeTokenService implements TokenService {
   }
   generateRefresh(): RefreshTokenPair {
     const token = `refresh-${++this.counter}`;
-    return { token, hash: `hash(${token})` };
+    return { token, hash: this.hashRefresh(token) };
+  }
+  hashRefresh(token: string): string {
+    return `hash(${token})`;
   }
 }
