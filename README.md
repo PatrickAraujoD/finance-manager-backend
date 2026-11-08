@@ -10,6 +10,20 @@ saltos confiaveis, pois define o IP usado no rate limit),
 `THROTTLE_TTL_SECONDS`, `THROTTLE_LIMIT`, `AUTH_THROTTLE_LIMIT` (por IP, padrao 20),
 `LOGIN_EMAIL_THROTTLE_LIMIT` (login por IP + e-mail normalizado, padrao 5).
 
+## Primeiro admin
+
+Registro publico sempre cria usuarios normais. O primeiro admin vem do seed, que le
+`ADMIN_EMAIL` e `ADMIN_PASSWORD` do ambiente (senha de 12 a 128 caracteres, mesma regra do
+registro) e `DATABASE_URL`:
+
+```
+ADMIN_EMAIL=voce@exemplo.com ADMIN_PASSWORD='...' npm run seed
+```
+
+O seed e idempotente: se ja existir uma conta com esse e-mail, nada e alterado (a senha de um
+admin existente nunca e sobrescrita) e a senha nunca e impressa. Depois, o admin gerencia papeis e
+ativacao em `GET /users` e `PATCH /users/:id`.
+
 ## Testes
 
 `npm test` (unitarios), `npm run test:integration` e `npm run test:e2e` (usam o Postgres do
