@@ -33,6 +33,25 @@ describe('JwtTokenService access tokens', () => {
     await expect(service.verifyAccess(token)).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
+  it('rejects a correctly signed token that has no exp claim', async () => {
+    const { service, clock } = setup();
+    const iat = Math.floor(clock.now().getTime() / 1000);
+    const token = jwt.sign({ role: 'N', iat }, SECRET, { algorithm: 'HS256', subject: 'u1' });
+    await expect(service.verifyAccess(token)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
+  it('rejects a token older than the access TTL even if its exp is far in the future', async () => {
+    const { service, clock } = setup();
+    const iat = Math.floor(clock.now().getTime() / 1000);
+    const token = jwt.sign({ role: 'N', iat, exp: iat + 365 * 24 * 3600 }, SECRET, {
+      algorithm: 'HS256',
+      subject: 'u1',
+    });
+    await expect(service.verifyAccess(token)).resolves.toBeDefined();
+    clock.advanceMinutes(16);
+    await expect(service.verifyAccess(token)).rejects.toBeInstanceOf(UnauthorizedError);
+  });
+
   it('rejects a tampered signature and a tampered payload', async () => {
     const { service } = setup();
     const token = await service.signAccess({ sub: 'u1', role: 'N' });
