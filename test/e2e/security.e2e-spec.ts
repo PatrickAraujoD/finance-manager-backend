@@ -122,4 +122,64 @@ describe('http security', () => {
       expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
     });
   });
+
+  describe('login throttle keyed by IP and email', () => {
+    let t: TestApp;
+    beforeAll(async () => {
+      t = await startApp({
+        authThrottleLimit: 30,
+        loginEmailThrottleLimit: 5,
+        throttleLimit: 1000,
+      });
+    });
+    afterAll(async () => {
+      await t.close();
+    });
+    const http = () => request(t.app.getHttpServer());
+    const attempt = (email: string) =>
+      http().post('/auth/login').send({ email, password: 'whatever it is' });
+
+    it('answers 429 to the 6th attempt on the same email', async () => {
+      for (let i = 0; i < 5; i++) expect((await attempt('victim@example.com')).status).toBe(401);
+      expect((await attempt('victim@example.com')).status).toBe(429);
+    });
+
+    it('normalizes the email (case and spaces) when counting', async () => {
+      for (let i = 0; i < 5; i++) expect((await attempt('norm@example.com')).status).toBe(401);
+      expect((await attempt('  NORM@Example.com ')).status).toBe(429);
+    });
+
+    it('still serves another email from the same IP within the per-IP limit', async () => {
+      expect((await attempt('other@example.com')).status).toBe(401);
+    });
+
+    it('does not break on a missing, non string or huge email', async () => {
+      for (const email of [undefined, 123, 'a'.repeat(50_000)]) {
+        const res = await http().post('/auth/login').send({ email, password: 'x' });
+        expect(res.status).toBeLessThan(500);
+      }
+    });
+  });
+
+  describe('login per-IP limit with the email limit out of the way', () => {
+    let t: TestApp;
+    beforeAll(async () => {
+      t = await startApp({ authThrottleLimit: 8, loginEmailThrottleLimit: 5, throttleLimit: 1000 });
+    });
+    afterAll(async () => {
+      await t.close();
+    });
+
+    it('still enforces the per-IP limit across different emails', async () => {
+      const http = () => request(t.app.getHttpServer());
+      const statuses: number[] = [];
+      for (let i = 0; i < 9; i++) {
+        const res = await http()
+          .post('/auth/login')
+          .send({ email: `spray${i}@example.com`, password: 'whatever it is' });
+        statuses.push(res.status);
+      }
+      expect(statuses.filter((s) => s === 429)).toHaveLength(1);
+    });
+  });
 });

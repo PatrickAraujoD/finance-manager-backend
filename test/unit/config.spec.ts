@@ -35,7 +35,8 @@ describe('loadConfig', () => {
       trustProxy: false,
       throttleTtlSeconds: 60,
       throttleLimit: 100,
-      authThrottleLimit: 5,
+      authThrottleLimit: 20,
+      loginEmailThrottleLimit: 5,
     });
   });
 
@@ -68,7 +69,13 @@ describe('loadConfig', () => {
       THROTTLE_TTL_SECONDS: '30',
       THROTTLE_LIMIT: '10',
       AUTH_THROTTLE_LIMIT: '2',
+      LOGIN_EMAIL_THROTTLE_LIMIT: '3',
     });
-    expect(config).toMatchObject({ throttleTtlSeconds: 30, throttleLimit: 10, authThrottleLimit: 2 });
+    expect(config).toMatchObject({
+      throttleTtlSeconds: 30,
+      throttleLimit: 10,
+      authThrottleLimit: 2,
+      loginEmailThrottleLimit: 3,
+    });
   });
 });
