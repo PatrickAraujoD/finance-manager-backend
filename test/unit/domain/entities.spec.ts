@@ -157,6 +157,26 @@ describe('Category', () => {
   it('rejects blank name', () => {
     expect(() => Category.create({ id: 'c1', name: ' ', ownerId: null })).toThrow(ValidationError);
   });
+
+  it('exposes a case-insensitive, trimmed nameKey for uniqueness', () => {
+    const a = Category.create({ id: 'c1', name: '  Alimentação ', ownerId: null });
+    const b = Category.create({ id: 'c2', name: 'ALIMENTAÇÃO', ownerId: null });
+    expect(a.nameKey).toBe(b.nameKey);
+    expect(a.name).toBe('Alimentação');
+  });
+
+  it('gives canonically equivalent names the same nameKey', () => {
+    const composed = Category.create({ id: 'c1', name: 'Caf\u00e9', ownerId: null });
+    const decomposed = Category.create({ id: 'c2', name: 'Cafe\u0301', ownerId: null });
+    expect(composed.nameKey).toBe(decomposed.nameKey);
+  });
+
+  it('rejects names over 60 characters', () => {
+    expect(() => Category.create({ id: 'c1', name: 'x'.repeat(61), ownerId: null })).toThrow(
+      ValidationError,
+    );
+    expect(Category.create({ id: 'c1', name: 'x'.repeat(60), ownerId: null }).name).toHaveLength(60);
+  });
 });
 
 describe('Receipt', () => {
