@@ -16,6 +16,7 @@ const envSchema = z.object({
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
   AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(20),
   LOGIN_EMAIL_THROTTLE_LIMIT: z.coerce.number().int().positive().default(5),
+  UPLOAD_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
 });
 
 export interface AppConfig {
@@ -33,6 +34,8 @@ export interface AppConfig {
   authThrottleLimit: number;
   /** Stricter limit for login attempts per IP + normalized email. */
   loginEmailThrottleLimit: number;
+  /** Receipt uploads per user (IP when anonymous) in the throttle window. */
+  uploadThrottleLimit: number;
 }
 
 function parseTrustProxy(raw: string): false | number {
@@ -59,5 +62,6 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     throttleLimit: e.THROTTLE_LIMIT,
     authThrottleLimit: e.AUTH_THROTTLE_LIMIT,
     loginEmailThrottleLimit: e.LOGIN_EMAIL_THROTTLE_LIMIT,
+    uploadThrottleLimit: e.UPLOAD_THROTTLE_LIMIT,
   };
 }

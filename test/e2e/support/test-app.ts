@@ -22,6 +22,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     throttleLimit: 10_000,
     authThrottleLimit: 10_000,
     loginEmailThrottleLimit: 10_000,
+    uploadThrottleLimit: 10_000,
     ...overrides,
   };
 }
