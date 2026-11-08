@@ -4,7 +4,7 @@ import { Expense } from '../../../src/domain/entities/expense';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
 import { RefreshToken } from '../../../src/domain/entities/refresh-token';
 import { User } from '../../../src/domain/entities/user';
-import { NotFoundError, UnauthorizedError, ValidationError } from '../../../src/domain/errors';
+import { ConflictError, NotFoundError, UnauthorizedError, ValidationError } from '../../../src/domain/errors';
 import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from '../../support/fakes/fake-category-repository';
 import { FakeExpenseRepository } from '../../support/fakes/fake-expense-repository';
@@ -45,6 +45,52 @@ describe('FakeUserRepository', () => {
     expect(await repo.findByEmail(Email.create('ANA@x.com'))).toBe(u);
     expect(await repo.findByEmail(Email.create('b@x.com'))).toBeNull();
     expect(await repo.list()).toEqual([u]);
+  });
+
+  it('save throws ConflictError when the email belongs to another id', async () => {
+    const repo = new FakeUserRepository();
+    const mk = (id: string, email: string) =>
+      User.create({ id, name: 'Ana', email: Email.create(email), passwordHash: 'h', role: 'N' });
+    await repo.save(mk('u1', 'ana@x.com'));
+    await expect(repo.save(mk('u2', 'ANA@x.com'))).rejects.toBeInstanceOf(ConflictError);
+    await expect(repo.save(mk('u1', 'ana@x.com'))).resolves.toBeUndefined();
+  });
+
+  it('mutate applies fn to the current value and returns the updated user', async () => {
+    const repo = new FakeUserRepository();
+    await repo.save(
+      User.create({
+        id: 'u1',
+        name: 'Ana',
+        email: Email.create('a@x.com'),
+        passwordHash: 'h',
+        role: 'N',
+      }),
+    );
+    const updated = await repo.mutate('u1', (u) => u.withActive(false));
+    expect(updated?.active).toBe(false);
+    expect((await repo.findById('u1'))?.active).toBe(false);
+    expect(await repo.mutate('missing', (u) => u)).toBeNull();
+  });
+
+  it('mutate serializes concurrent mutations (no lost updates)', async () => {
+    const repo = new FakeUserRepository();
+    await repo.save(
+      User.create({
+        id: 'u1',
+        name: 'Ana',
+        email: Email.create('a@x.com'),
+        passwordHash: 'h',
+        role: 'N',
+      }),
+    );
+    const now = new Date('2026-11-08T00:00:00Z');
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        repo.mutate('u1', (u) => u.registerFailedLogin(now, 100, 15)),
+      ),
+    );
+    expect((await repo.findById('u1'))?.failedLogins).toBe(4);
   });
 });
 
@@ -149,6 +195,41 @@ describe('FakeRefreshTokenRepository', () => {
     expect((await repo.findByHash('h-1'))?.revokedAt).not.toBeNull();
     expect((await repo.findByHash('h-2'))?.revokedAt).not.toBeNull();
     expect((await repo.findByHash('h-3'))?.revokedAt).toBeNull();
+  });
+});
+
+describe('FakeRefreshTokenRepository.revokeIfActive', () => {
+  const mk = () =>
+    RefreshToken.create({
+      id: '1',
+      userId: 'u1',
+      familyId: 'f1',
+      tokenHash: 'h-1',
+      expiresAt: new Date('2027-01-01T00:00:00Z'),
+    });
+
+  it('revokes an active token once and reports false afterwards', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk());
+    const now = new Date('2026-11-08T00:00:00Z');
+    expect(await repo.revokeIfActive('1', now)).toBe(true);
+    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
+    expect(await repo.revokeIfActive('1', new Date())).toBe(false);
+    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
+  });
+
+  it('returns false for an unknown id', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    expect(await repo.revokeIfActive('nope', new Date())).toBe(false);
+  });
+
+  it('lets exactly one of many concurrent calls win', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk());
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => repo.revokeIfActive('1', new Date())),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
   });
 });
 

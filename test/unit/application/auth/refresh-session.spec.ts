@@ -83,6 +83,27 @@ describe('RefreshSession', () => {
     );
   });
 
+  it('lets only one of two concurrent refreshes with the same token succeed', async () => {
+    const { refresh, refreshTokens, tokens, session } = await setup();
+    const results = await Promise.allSettled([
+      refresh.execute({ refreshToken: session.refreshToken }),
+      refresh.execute({ refreshToken: session.refreshToken }),
+    ]);
+    const ok = results.filter((r) => r.status === 'fulfilled');
+    const failed = results.filter((r) => r.status === 'rejected');
+    expect(ok).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    expect((failed[0] as PromiseRejectedResult).reason).toBeInstanceOf(UnauthorizedError);
+
+    // The loser is treated as reuse: the family is burned, including the winner's new token.
+    const winner = (ok[0] as PromiseFulfilledResult<{ refreshToken: string }>).value;
+    const issued = await refreshTokens.findByHash(tokens.hashRefresh(winner.refreshToken));
+    expect(issued?.revokedAt).not.toBeNull();
+    await expect(refresh.execute({ refreshToken: winner.refreshToken })).rejects.toBeInstanceOf(
+      UnauthorizedError,
+    );
+  });
+
   it('reuse does not affect other families of the same user', async () => {
     const { refresh, session, refreshTokens, tokens, users, ids, clock } = await setup();
     const login = new Login(

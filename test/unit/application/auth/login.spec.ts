@@ -126,6 +126,22 @@ describe('Login', () => {
     expect(user?.lockedUntil?.getTime()).toBe(clock.now().getTime() + 15 * 60_000);
   });
 
+  it('counts every concurrent wrong attempt and locks at the right threshold', async () => {
+    const { useCase, users } = await setup();
+    await Promise.all(
+      Array.from({ length: MAX_FAILED_LOGINS - 1 }, () =>
+        failure(useCase.execute({ email: 'ana@x.com', password: 'wrong-password-1' })),
+      ),
+    );
+    let user = await users.findById('u1');
+    expect(user?.failedLogins).toBe(MAX_FAILED_LOGINS - 1);
+    expect(user?.lockedUntil).toBeNull();
+    await failure(useCase.execute({ email: 'ana@x.com', password: 'wrong-password-1' }));
+    user = await users.findById('u1');
+    expect(user?.failedLogins).toBe(MAX_FAILED_LOGINS);
+    expect(user?.lockedUntil).not.toBeNull();
+  });
+
   it('rejects the correct password during the lock and does not slide the lock', async () => {
     const { useCase, users, clock } = await setup();
     for (let i = 0; i < MAX_FAILED_LOGINS; i++) {
