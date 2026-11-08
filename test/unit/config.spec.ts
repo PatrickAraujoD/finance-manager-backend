@@ -91,3 +91,48 @@ describe('loadConfig', () => {
     }
   });
 });
+
+describe('loadConfig server timeouts', () => {
+  it('defaults to 60 s request, 20 s headers and 5 s keep-alive', () => {
+    expect(loadConfig(valid)).toMatchObject({
+      requestTimeoutMs: 60_000,
+      headersTimeoutMs: 20_000,
+      keepAliveTimeoutMs: 5_000,
+    });
+  });
+
+  it('reads the three timeouts from the environment', () => {
+    const config = loadConfig({
+      ...valid,
+      REQUEST_TIMEOUT_MS: '30000',
+      HEADERS_TIMEOUT_MS: '10000',
+      KEEP_ALIVE_TIMEOUT_MS: '2000',
+    });
+    expect(config).toMatchObject({
+      requestTimeoutMs: 30_000,
+      headersTimeoutMs: 10_000,
+      keepAliveTimeoutMs: 2_000,
+    });
+  });
+
+  it.each([
+    ['REQUEST_TIMEOUT_MS', '0'],
+    ['REQUEST_TIMEOUT_MS', '999'],
+    ['REQUEST_TIMEOUT_MS', '600001'],
+    ['REQUEST_TIMEOUT_MS', 'abc'],
+    ['REQUEST_TIMEOUT_MS', '1.5'],
+    ['HEADERS_TIMEOUT_MS', '0'],
+    ['HEADERS_TIMEOUT_MS', '120001'],
+    ['HEADERS_TIMEOUT_MS', '-5'],
+    ['KEEP_ALIVE_TIMEOUT_MS', '0'],
+    ['KEEP_ALIVE_TIMEOUT_MS', '120001'],
+  ])('rejects the absurd %s=%s', (key, raw) => {
+    expect(() => loadConfig({ ...valid, [key]: raw })).toThrow(key);
+  });
+
+  it('rejects headers timeout longer than the request timeout', () => {
+    expect(() =>
+      loadConfig({ ...valid, REQUEST_TIMEOUT_MS: '5000', HEADERS_TIMEOUT_MS: '6000' }),
+    ).toThrow('HEADERS_TIMEOUT_MS');
+  });
+});
