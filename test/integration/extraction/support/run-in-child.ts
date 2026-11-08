@@ -13,7 +13,14 @@ export function extractInChild(kind: 'image' | 'pdf', file: string): Promise<Chi
     const child = spawn(
       process.execPath,
       ['-r', 'ts-node/register/transpile-only', join(__dirname, 'extract-in-child.ts'), kind, file],
-      { stdio: ['ignore', 'pipe', 'ignore'] },
+      {
+        stdio: ['ignore', 'pipe', 'ignore'],
+        // ts-node under TypeScript 6 needs an explicit rootDir for a script outside src/.
+        env: {
+          ...process.env,
+          TS_NODE_COMPILER_OPTIONS: JSON.stringify({ rootDir: join(__dirname, '..', '..', '..', '..') }),
+        },
+      },
     );
     let out = '';
     child.stdout.on('data', (chunk: Buffer) => (out += chunk));
