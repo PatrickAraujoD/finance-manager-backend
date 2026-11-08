@@ -1,0 +1,126 @@
+import request from 'supertest';
+import { bearer, Session, signUp } from './support/auth-helpers';
+import { cleanTables, startApp, TestApp } from './support/test-app';
+
+const PASSWORD = 'correct horse battery';
+const ZWJ = '\u200d';
+const FAMILY = `\u{1f468}${ZWJ}\u{1f469}${ZWJ}\u{1f467}`;
+
+const INVISIBLE = [
+  '\u200b',
+  '\u200c',
+  '\u2060',
+  '\ufeff',
+  '\u00ad',
+  '\u202a',
+  '\u202b',
+  '\u202c',
+  '\u202d',
+  '\u202e',
+  '\u2066',
+  '\u2067',
+  '\u2068',
+  '\u2069',
+  '\u061c',
+  '\u200e',
+  '\u200f',
+];
+const SEPARATORS = ['\u2028', '\u2029'];
+const label = (c: string) => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
+
+describe('invisible and spoofing Unicode', () => {
+  let t: TestApp;
+  let ana: Session;
+
+  beforeAll(async () => {
+    t = await startApp();
+  });
+  afterAll(async () => {
+    await t.close();
+  });
+  beforeEach(async () => {
+    await cleanTables(t.prisma);
+    ana = await signUp(t, 'ana@example.com');
+  });
+
+  const http = () => request(t.app.getHttpServer());
+  const register = (name: string, email: string, password = PASSWORD) =>
+    http().post('/auth/register').send({ name, email, password });
+  const category = (name: string) =>
+    http().post('/categories').set(...bearer(ana)).send({ name });
+  const expenseWith = async (description: string) => {
+    const cat = (await category(`Cat ${Math.random()}`)).body.id;
+    return http()
+      .post('/expenses')
+      .set(...bearer(ana))
+      .send({ categoryId: cat, amountCents: 100, paidAlone: true, spentAt: '2026-11-01', description });
+  };
+
+  describe('user names', () => {
+    it.each([...INVISIBLE, ...SEPARATORS].map((c) => [label(c), c]))('reject %s', async (_l, c) => {
+      expect((await register(`An${c}a`, 'new@example.com')).status).toBe(400);
+    });
+
+    it('reject the right to left override U+202E in a name', async () => {
+      expect((await register('evil\u202etxt.exe', 'rlo@example.com')).status).toBe(400);
+    });
+
+    it('accept a ZWJ emoji sequence', async () => {
+      expect((await register(`Fam ${FAMILY}`, 'fam@example.com')).status).toBe(201);
+    });
+  });
+
+  describe('category names', () => {
+    it.each([...INVISIBLE, ...SEPARATORS].map((c) => [label(c), c]))('reject %s', async (_l, c) => {
+      expect((await category(`Fo${c}od`)).status).toBe(400);
+    });
+
+    it('accept a ZWJ emoji sequence', async () => {
+      const res = await category(`${FAMILY} Familia`);
+      expect(res.status).toBe(201);
+      expect(res.body.name).toBe(`${FAMILY} Familia`);
+    });
+  });
+
+  describe('emails', () => {
+    const spaces = ['\u2003', '\u3000', '\u00a0', '\u180e', ZWJ];
+    it.each([...INVISIBLE, ...SEPARATORS, ...spaces].map((c) => [label(c), c]))(
+      'registration rejects %s',
+      async (_l, c) => {
+        expect((await register('Bia', `a${c}@example.com`)).status).toBe(400);
+      },
+    );
+
+    it('registration rejects the spoofed address a<ZWSP>@x.com', async () => {
+      expect((await register('Bia', 'a\u200b@x.com')).status).toBe(400);
+    });
+
+    it('login rejects an invisible character in the email (400)', async () => {
+      const res = await http()
+        .post('/auth/login')
+        .send({ email: 'ana\u200b@example.com', password: PASSWORD });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('expense descriptions', () => {
+    it.each([...INVISIBLE, ...SEPARATORS].map((c) => [label(c), c]))('reject %s', async (_l, c) => {
+      expect((await expenseWith(`a${c}b`)).status).toBe(400);
+    });
+
+    it('reject U+2028 specifically', async () => {
+      expect((await expenseWith('linha\u2028outra')).status).toBe(400);
+    });
+
+    it('accept TAB, LF and a ZWJ emoji', async () => {
+      expect((await expenseWith(`a\tb\nc ${FAMILY}`)).status).toBe(201);
+    });
+  });
+
+  describe('registration password', () => {
+    it('accepts invisible Unicode (only controls are refused)', async () => {
+      const res = await register('Caio', 'caio@example.com', `pass\u200bword\u202e long enough`);
+      expect(res.status).toBe(201);
+    });
+  });
+});

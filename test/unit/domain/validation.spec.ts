@@ -55,7 +55,7 @@ describe('control characters', () => {
   });
 
   it('keeps accepting non-control characters next to the C1 range', () => {
-    expect(() => requireCleanText('\u00a0 \u00a1 \u2028x', 'f')).not.toThrow();
+    expect(() => requireCleanText('\u00a0 \u00a1 \u2003x', 'f')).not.toThrow();
   });
 
   it.each(controls)('names reject %s (user, category)', (_n, c) => {
