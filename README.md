@@ -52,7 +52,8 @@ outros; gasto alheio e um 404 identico ao inexistente).
 
 Quatro rotas `GET`, todas privadas (token obrigatorio, throttle global) e escopadas ao proprio
 usuario: nao ha id de usuario na requisicao e o admin so ve os proprios dados. A query e estrita:
-mes ausente, formato diferente de `YYYY-MM`, parametro repetido ou desconhecido -> 400. Valores em
+mes ausente, formato diferente de `YYYY-MM`, ano fora de 1900 a 9998 (vale tambem para
+`PUT/GET /income/:month`), parametro repetido ou desconhecido -> 400. Valores em
 centavos sao inteiros JSON. Os meses/dias seguem o calendario UTC (`spentAt` e uma data).
 
 - `GET /reports/by-category?month=2026-11` ("para onde vai o dinheiro"): categorias ordenadas por
@@ -122,3 +123,12 @@ A extracao de PDF roda num processo filho cuja memoria (RSS) o servidor vigia. N
 `/proc/<pid>/status`; onde isso nao existir (macOS) usa `ps`, que imagens enxutas (por exemplo
 `node:*-slim`) podem nao trazer: instale `procps`. Se o RSS nao puder ser lido, o filho e morto
 na hora e o comprovante fica sem valor sugerido (falha fechada), nunca sem limite.
+
+## Texto aceito
+
+Campos de texto rejeitam (400) as categorias Unicode `Cc` (controles), `Cf` (invisiveis e
+bidirecionais, como U+200B e U+202E), `Zl` e `Zp` (U+2028/2029) e surrogates soltos. Excecoes por
+campo: nomes (usuario, categoria) e descricao aceitam U+200D (emojis compostos) e espacos Unicode
+visiveis; a descricao ainda aceita TAB e LF; o e-mail nao aceita nenhum espaco Unicode nem excecao;
+a senha de cadastro so recusa controles C0/C1/DEL, NUL e surrogates soltos. No login a senha e o
+refresh token sao opacos (so tamanho), para contas antigas continuarem entrando.
