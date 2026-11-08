@@ -13,12 +13,6 @@ export class FakeRefreshTokenRepository implements RefreshTokenRepository {
     for (const t of this.items.values()) if (t.tokenHash === tokenHash) return t;
     return null;
   }
-  async revokeIfActive(id: string, now: Date): Promise<boolean> {
-    const t = this.items.get(id);
-    if (!t || t.revokedAt !== null) return false;
-    this.items.set(id, t.revoke(now));
-    return true;
-  }
   /** Synchronous body (no awaits), so it is atomic under the event loop; throws before mutating. */
   async rotate(oldId: string, replacement: RefreshToken, now: Date): Promise<boolean> {
     const old = this.items.get(oldId);

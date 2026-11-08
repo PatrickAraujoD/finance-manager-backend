@@ -253,41 +253,6 @@ describe('FakeRefreshTokenRepository.rotate', () => {
   });
 });
 
-describe('FakeRefreshTokenRepository.revokeIfActive', () => {
-  const mk = () =>
-    RefreshToken.create({
-      id: '1',
-      userId: 'u1',
-      familyId: 'f1',
-      tokenHash: 'h-1',
-      expiresAt: new Date('2027-01-01T00:00:00Z'),
-    });
-
-  it('revokes an active token once and reports false afterwards', async () => {
-    const repo = new FakeRefreshTokenRepository();
-    await repo.save(mk());
-    const now = new Date('2026-11-08T00:00:00Z');
-    expect(await repo.revokeIfActive('1', now)).toBe(true);
-    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
-    expect(await repo.revokeIfActive('1', new Date())).toBe(false);
-    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
-  });
-
-  it('returns false for an unknown id', async () => {
-    const repo = new FakeRefreshTokenRepository();
-    expect(await repo.revokeIfActive('nope', new Date())).toBe(false);
-  });
-
-  it('lets exactly one of many concurrent calls win', async () => {
-    const repo = new FakeRefreshTokenRepository();
-    await repo.save(mk());
-    const results = await Promise.all(
-      Array.from({ length: 5 }, () => repo.revokeIfActive('1', new Date())),
-    );
-    expect(results.filter(Boolean)).toHaveLength(1);
-  });
-});
-
 describe('FakeReportRepository', () => {
   it('aggregates only the requested user and month', async () => {
     const expenses = new FakeExpenseRepository();

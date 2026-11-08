@@ -57,23 +57,6 @@ describe('PrismaRefreshTokenRepository (Postgres)', () => {
     expect(await repo.findByHash('nope')).toBeNull();
   });
 
-  it('revokeIfActive revokes once and then returns false', async () => {
-    await repo.save(token('t1', 'u1', 'f1'));
-    expect(await repo.revokeIfActive('t1', NOW)).toBe(true);
-    expect(await repo.revokeIfActive('t1', NOW)).toBe(false);
-    expect((await repo.findByHash('hash-t1'))?.revokedAt?.getTime()).toBe(NOW.getTime());
-  });
-
-  it('revokeIfActive returns false for an unknown id', async () => {
-    expect(await repo.revokeIfActive('nope', NOW)).toBe(false);
-  });
-
-  it('revokeIfActive: of 2 concurrent calls exactly one returns true', async () => {
-    await repo.save(token('t1', 'u1', 'f1'));
-    const results = await Promise.all([repo.revokeIfActive('t1', NOW), repo.revokeIfActive('t1', NOW)]);
-    expect(results.filter(Boolean)).toHaveLength(1);
-  });
-
   describe('rotate', () => {
     it('revokes the old token and stores the replacement', async () => {
       await repo.save(token('t1', 'u1', 'f1'));
