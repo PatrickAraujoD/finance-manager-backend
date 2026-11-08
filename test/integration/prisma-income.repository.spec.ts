@@ -79,8 +79,19 @@ describe('PrismaIncomeRepository (Postgres)', () => {
   });
 
   it('refuses to read a stored value beyond the safe integer range', async () => {
-    await prisma.client.$executeRaw`INSERT INTO "MonthlyIncome" ("userId","month","amountCents","updatedAt") VALUES ('u1','2026-11',9007199254740993,now())`;
-    await expect(repo.find('u1', '2026-11')).rejects.toThrow(/safe integer/);
+    // Only reachable behind the domain's back: lift the ceiling for this one row.
+    await prisma.client.$executeRawUnsafe(
+      'ALTER TABLE "MonthlyIncome" DROP CONSTRAINT "MonthlyIncome_amountCents_max"',
+    );
+    try {
+      await prisma.client.$executeRaw`INSERT INTO "MonthlyIncome" ("userId","month","amountCents","updatedAt") VALUES ('u1','2026-11',9007199254740993,now())`;
+      await expect(repo.find('u1', '2026-11')).rejects.toThrow(/safe integer/);
+    } finally {
+      await prisma.client.$executeRawUnsafe(`DELETE FROM "MonthlyIncome" WHERE "userId" = 'u1'`);
+      await prisma.client.$executeRawUnsafe(
+        'ALTER TABLE "MonthlyIncome" ADD CONSTRAINT "MonthlyIncome_amountCents_max" CHECK ("amountCents" <= 100000000000)',
+      );
+    }
   });
 
   describe('database constraints (bypassing the adapter)', () => {
