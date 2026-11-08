@@ -36,7 +36,8 @@ const AMOUNT = '((?:r\\$[ \\t]*)?(?:\\d{1,3}(?:\\.\\d{3})+|\\d+),\\d{2})(?![\\d]
 const PATTERN = new RegExp(`(?<!\\p{L}[ \\t]*)\\b${LABEL}\\b${GAP}${AMOUNT}`, 'giu');
 
 // A payment that did not (or not yet) happen: nothing in the text can be called "paid".
-const NOT_PAID = /estorn|cancel|agendad|nao\s+realiz|negad|recus|falh|pendente/;
+const NOT_PAID =
+  /estorn|cancel|agendad|nao\s+(?:foi\s+)?(?:realiz|efetiv|conclu)|negad|recus|falh|pendente|devolv|devoluc|reembols|expirad|processamento|aguardando|analise|previst|orcamento|proposta|gerado/;
 
 // Section labels: an amount under them is a fee, a balance, an installment... not the payment.
 const SECTION_WORD =
@@ -44,7 +45,7 @@ const SECTION_WORD =
 const SECTION = new RegExp(`\\b${SECTION_WORD}s?\\b`);
 const SECTION_RIGHT_AFTER = new RegExp(`^[ \\t]*[(-]*[ \\t]*${SECTION_WORD}s?\\b`);
 // Words that change the amount of a bill; if one is present a bare "Valor" is ambiguous.
-const ADJUSTMENT = /\b(?:desconto|abatimento|juros|multa|mora|encargo|acrescimo)s?\b/;
+const ADJUSTMENT = /\b(?:desconto|abatimento|juros|multa|mora|encargo|acrescimo|minimo)s?\b/;
 // A label right after another label ("Valor Total: Valor R$ 5,00") is a column heading or a
 // repeated caption; which of the two the number belongs to is unknowable.
 const LABEL_JUST_BEFORE = /\b(?:valor|total)(?:[ \t]+(?:pago|total))?[ \t:]*$/;
