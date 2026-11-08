@@ -5,7 +5,6 @@ import {
   HttpCode,
   Inject,
   Post,
-  UseGuards,
 } from '@nestjs/common';
 import { UserRepository } from '../../../application/ports/user-repository';
 import { Login } from '../../../application/use-cases/auth/login';
@@ -15,9 +14,9 @@ import { RegisterUser } from '../../../application/use-cases/auth/register-user'
 import { UnauthorizedError } from '../../../domain/errors';
 import { Role } from '../../../domain/role';
 import { AuthenticatedUser, CurrentUser } from '../decorators/current-user.decorator';
+import { Public } from '../decorators/public.decorator';
 import { StrictThrottle } from '../decorators/strict-throttle.decorator';
 import { LoginDto, RefreshTokenDto, RegisterDto } from '../dtos/auth.dto';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { USER_REPOSITORY } from '../tokens';
 
 @Controller('auth')
@@ -30,12 +29,14 @@ export class AuthController {
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
   ) {}
 
+  @Public()
   @Post('register')
   @StrictThrottle()
   register(@Body() dto: RegisterDto): Promise<{ id: string }> {
     return this.registerUser.execute(dto);
   }
 
+  @Public()
   @Post('login')
   @HttpCode(200)
   @StrictThrottle()
@@ -43,6 +44,7 @@ export class AuthController {
     return this.login.execute(dto);
   }
 
+  @Public()
   @Post('refresh')
   @HttpCode(200)
   @StrictThrottle()
@@ -50,6 +52,7 @@ export class AuthController {
     return this.refreshSession.execute(dto);
   }
 
+  @Public()
   @Post('logout')
   @HttpCode(204)
   async logout(@Body() dto: RefreshTokenDto): Promise<void> {
@@ -57,7 +60,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
   async me(
     @CurrentUser() current: AuthenticatedUser,
   ): Promise<{ id: string; name: string; email: string; role: Role }> {

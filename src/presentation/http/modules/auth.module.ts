@@ -10,8 +10,6 @@ import { RefreshTokenRepository } from '../../../application/ports/refresh-token
 import { TokenService } from '../../../application/ports/token-service';
 import { UserRepository } from '../../../application/ports/user-repository';
 import { AuthController } from '../controllers/auth.controller';
-import { JwtAuthGuard } from '../guards/jwt-auth.guard';
-import { RolesGuard } from '../guards/roles.guard';
 import {
   CLOCK,
   ID_GENERATOR,
@@ -24,8 +22,6 @@ import {
 @Module({
   controllers: [AuthController],
   providers: [
-    JwtAuthGuard,
-    RolesGuard,
     {
       provide: RegisterUser,
       inject: [USER_REPOSITORY, PASSWORD_HASHER, ID_GENERATOR],
@@ -69,6 +65,5 @@ import {
         new Logout(refreshTokens, tokens),
     },
   ],
-  exports: [JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}

@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthController } from '../controllers/health.controller';
 import { AppConfig } from '../config';
+import { JwtAuthGuard } from '../guards/jwt-auth.guard';
+import { RolesGuard } from '../guards/roles.guard';
 import { STRICT_THROTTLE_KEY } from '../decorators/strict-throttle.decorator';
 import { AuthModule } from './auth.module';
 import { CoreModule } from './core.module';
@@ -30,7 +32,13 @@ export class AppModule {
         }),
       ],
       controllers: [HealthController],
-      providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+      // Order matters: throttle first, then authentication, then roles. Routes are private
+      // unless marked with @Public().
+      providers: [
+        { provide: APP_GUARD, useClass: ThrottlerGuard },
+        { provide: APP_GUARD, useClass: JwtAuthGuard },
+        { provide: APP_GUARD, useClass: RolesGuard },
+      ],
     };
   }
 }
