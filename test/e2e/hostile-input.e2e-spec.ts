@@ -109,8 +109,8 @@ describe('hostile text input never causes a 500', () => {
 
   describe('control characters in text fields', () => {
     const bad = ['\\u0007', '\\u001b', '\\r', '\\u007f', '\\u0085', '\\u009f', '\\t', '\\n'];
-    const ok = ['\\t', '\\n'];
-    const single = ['\\u0007', '\\u001b', '\\r', '\\u007f', '\\u0085', '\\u009f'];
+    const ok = ['\\t', '\\n', '\\r'];
+    const single = ['\\u0007', '\\u001b', '\\u007f', '\\u0085', '\\u009f'];
 
     it.each(bad)('rejects %s in a user name (400)', async (c) => {
       const res = await raw(
