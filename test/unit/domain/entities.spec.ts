@@ -192,9 +192,9 @@ describe('MonthlyIncome', () => {
     },
   );
 
-  it('rejects negative income', () => {
+  it.each([0, -1])('rejects income of %i cents', (cents) => {
     expect(() =>
-      MonthlyIncome.create({ userId: 'u1', month: '2026-11', amount: Money.fromCents(-1) }),
+      MonthlyIncome.create({ userId: 'u1', month: '2026-11', amount: Money.fromCents(cents) }),
     ).toThrow(ValidationError);
   });
 });
@@ -259,5 +259,56 @@ describe('Date immutability', () => {
     const r = t.revoke(now);
     now.setUTCFullYear(2000);
     expect(r.revokedAt).toEqual(new Date('2026-11-09T00:00:00Z'));
+  });
+});
+
+describe('Required identifiers', () => {
+  const blanks = ['', '   '];
+
+  it.each(blanks)('rejects blank ids on Expense (%p)', (v) => {
+    expect(() => Expense.create({ ...expenseProps, id: v })).toThrow(ValidationError);
+    expect(() => Expense.create({ ...expenseProps, userId: v })).toThrow(ValidationError);
+    expect(() => Expense.create({ ...expenseProps, categoryId: v })).toThrow(ValidationError);
+  });
+
+  it.each(blanks)('rejects blank ids on User, Category, Receipt, RefreshToken, Income (%p)', (v) => {
+    expect(() => User.create({ ...userProps, id: v })).toThrow(ValidationError);
+    expect(() => Category.create({ id: v, name: 'Food', ownerId: null })).toThrow(ValidationError);
+    const receipt = {
+      id: 'r1',
+      userId: 'u1',
+      storageKey: 'k.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 1,
+      suggestedAmount: null,
+    };
+    expect(() => Receipt.create({ ...receipt, id: v })).toThrow(ValidationError);
+    expect(() => Receipt.create({ ...receipt, userId: v })).toThrow(ValidationError);
+    const token = {
+      id: 't1',
+      userId: 'u1',
+      familyId: 'f1',
+      tokenHash: 'h',
+      expiresAt: new Date('2026-12-01T00:00:00Z'),
+    };
+    expect(() => RefreshToken.create({ ...token, id: v })).toThrow(ValidationError);
+    expect(() => RefreshToken.create({ ...token, userId: v })).toThrow(ValidationError);
+    expect(() =>
+      MonthlyIncome.create({ userId: v, month: '2026-11', amount: Money.fromCents(1) }),
+    ).toThrow(ValidationError);
+  });
+
+  it('limits Expense.description to 500 characters', () => {
+    expect(
+      Expense.create({ ...expenseProps, description: 'a'.repeat(500) }).description,
+    ).toHaveLength(500);
+    expect(() => Expense.create({ ...expenseProps, description: 'a'.repeat(501) })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('normalizes spentAt to 00:00 UTC of the same UTC calendar day', () => {
+    const e = Expense.create({ ...expenseProps, spentAt: new Date('2026-03-31T23:30:00Z') });
+    expect(e.spentAt).toEqual(new Date('2026-03-31T00:00:00Z'));
   });
 });
