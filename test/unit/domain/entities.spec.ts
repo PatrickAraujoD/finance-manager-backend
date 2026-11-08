@@ -58,6 +58,15 @@ describe('User', () => {
     expect(u.isLocked(now)).toBe(false);
   });
 
+  it('has no createdAt until persisted, and keeps it through changes', () => {
+    expect(User.create(userProps).createdAt).toBeNull();
+    const created = new Date('2026-01-02T03:04:05Z');
+    const u = User.create({ ...userProps, createdAt: created });
+    expect(u.createdAt).toEqual(created);
+    expect(u.createdAt).not.toBe(created);
+    expect(u.withRole('A').withActive(false).createdAt).toEqual(created);
+  });
+
   it('rejects blank name', () => {
     expect(() => User.create({ ...userProps, name: '  ' })).toThrow(ValidationError);
   });

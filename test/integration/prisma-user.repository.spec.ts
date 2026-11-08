@@ -54,6 +54,17 @@ describe('PrismaUserRepository (Postgres)', () => {
     expect(await repo.list()).toHaveLength(1);
   });
 
+  it('exposes the database createdAt and lists in creation order', async () => {
+    await repo.save(makeUser('u2', 'b@x.com'));
+    await new Promise((r) => setTimeout(r, 15));
+    await repo.save(makeUser('u1', 'a@x.com'));
+    const listed = await repo.list();
+    expect(listed.map((u) => u.id)).toEqual(['u2', 'u1']);
+    expect(listed[0].createdAt).toBeInstanceOf(Date);
+    expect(listed[0].createdAt!.getTime()).toBeLessThan(listed[1].createdAt!.getTime());
+    expect((await repo.findById('u1'))?.createdAt).toEqual(listed[1].createdAt);
+  });
+
   it('lists all users', async () => {
     await repo.save(makeUser('u1', 'a@x.com'));
     await repo.save(makeUser('u2', 'b@x.com'));
