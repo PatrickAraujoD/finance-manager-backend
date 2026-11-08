@@ -18,7 +18,7 @@ export class Expense {
   static create(input: ExpenseProps): Expense {
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (Number.isNaN(input.spentAt.getTime())) throw new ValidationError('Invalid spentAt date');
-    return new Expense({ ...input });
+    return new Expense({ ...input, spentAt: new Date(input.spentAt.getTime()) });
   }
 
   get id(): string {
@@ -40,7 +40,7 @@ export class Expense {
     return this.props.paidAlone;
   }
   get spentAt(): Date {
-    return this.props.spentAt;
+    return new Date(this.props.spentAt.getTime());
   }
   get description(): string | undefined {
     return this.props.description;

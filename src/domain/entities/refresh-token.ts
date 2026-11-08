@@ -19,7 +19,11 @@ export class RefreshToken {
   static create(input: CreateRefreshTokenInput): RefreshToken {
     if (!input.tokenHash) throw new ValidationError('tokenHash is required');
     if (Number.isNaN(input.expiresAt.getTime())) throw new ValidationError('Invalid expiresAt');
-    return new RefreshToken({ ...input, revokedAt: input.revokedAt ?? null });
+    return new RefreshToken({
+      ...input,
+      expiresAt: new Date(input.expiresAt.getTime()),
+      revokedAt: input.revokedAt ? new Date(input.revokedAt.getTime()) : null,
+    });
   }
 
   get id(): string {
@@ -35,13 +39,13 @@ export class RefreshToken {
     return this.props.tokenHash;
   }
   get expiresAt(): Date {
-    return this.props.expiresAt;
+    return new Date(this.props.expiresAt.getTime());
   }
   get revokedAt(): Date | null {
-    return this.props.revokedAt;
+    return this.props.revokedAt ? new Date(this.props.revokedAt.getTime()) : null;
   }
 
   revoke(now: Date): RefreshToken {
-    return new RefreshToken({ ...this.props, revokedAt: now });
+    return new RefreshToken({ ...this.props, revokedAt: new Date(now.getTime()) });
   }
 }

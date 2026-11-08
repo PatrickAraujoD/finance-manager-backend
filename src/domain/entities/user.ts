@@ -39,7 +39,7 @@ export class User {
       role: input.role,
       active: input.active ?? true,
       failedLogins,
-      lockedUntil: input.lockedUntil ?? null,
+      lockedUntil: input.lockedUntil ? new Date(input.lockedUntil.getTime()) : null,
     });
   }
 
@@ -65,7 +65,7 @@ export class User {
     return this.#props.failedLogins;
   }
   get lockedUntil(): Date | null {
-    return this.#props.lockedUntil;
+    return this.#props.lockedUntil ? new Date(this.#props.lockedUntil.getTime()) : null;
   }
 
   registerFailedLogin(now: Date, maxAttempts: number, lockMinutes: number): User {
