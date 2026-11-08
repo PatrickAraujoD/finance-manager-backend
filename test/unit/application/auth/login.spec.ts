@@ -140,15 +140,17 @@ describe('Login', () => {
     expect(user?.failedLogins).toBe(MAX_FAILED_LOGINS);
   });
 
-  it('does not even verify the password while locked', async () => {
+  it('only verifies against the dummy hash while locked, with the same generic error', async () => {
     const hasher = new SpyHasher();
     const { useCase } = await setup(hasher);
     for (let i = 0; i < MAX_FAILED_LOGINS; i++) {
       await failure(useCase.execute({ email: 'ana@x.com', password: 'wrong-password-1' }));
     }
     hasher.verifyCalls = [];
-    await failure(useCase.execute({ email: 'ana@x.com', password: PASSWORD }));
-    expect(hasher.verifyCalls).toEqual([]);
+    const e = await failure(useCase.execute({ email: 'ana@x.com', password: PASSWORD }));
+    expect(hasher.verifyCalls).toEqual([{ hash: DUMMY_HASH, plain: PASSWORD }]);
+    expect(e).toBeInstanceOf(UnauthorizedError);
+    expect(e.message).toBe('Invalid credentials');
   });
 
   it('accepts the correct password after the lock expires and clears the counters', async () => {
