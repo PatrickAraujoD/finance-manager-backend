@@ -10,7 +10,7 @@ function errors<T extends object>(cls: new () => T, plain: object): string[] {
   return validateSync(plainToInstance(cls, plain)).map((e) => e.property);
 }
 
-describe('auth DTOs reject NUL and lone surrogates', () => {
+describe('auth DTOs', () => {
   it('accepts clean input', () => {
     expect(errors(RegisterDto, { name: 'Zoë 😀', email: 'a@x.com', password: PASSWORD })).toEqual([]);
   });
@@ -25,11 +25,15 @@ describe('auth DTOs reject NUL and lone surrogates', () => {
     );
   });
 
-  it.each(hostile)('LoginDto.password %j', (v) => {
-    expect(errors(LoginDto, { email: 'a@x.com', password: v })).toContain('password');
+  // Login passwords and refresh tokens are opaque: they only reach the hasher or a hash lookup,
+  // so only their size is checked (older accounts may hold passwords with control characters).
+  it.each(hostile)('LoginDto.password %j is only size checked', (v) => {
+    expect(errors(LoginDto, { email: 'a@x.com', password: v })).toEqual([]);
+    expect(errors(LoginDto, { email: 'a@x.com', password: 'x'.repeat(129) })).toContain('password');
   });
 
-  it.each(hostile)('RefreshTokenDto.refreshToken %j', (v) => {
-    expect(errors(RefreshTokenDto, { refreshToken: v })).toContain('refreshToken');
+  it.each(hostile)('RefreshTokenDto.refreshToken %j is only size checked', (v) => {
+    expect(errors(RefreshTokenDto, { refreshToken: v })).toEqual([]);
+    expect(errors(RefreshTokenDto, { refreshToken: 'x'.repeat(513) })).toContain('refreshToken');
   });
 });
