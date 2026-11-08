@@ -2,6 +2,7 @@ import { Email } from '../../src/domain/email';
 import { Category } from '../../src/domain/entities/category';
 import { User } from '../../src/domain/entities/user';
 import { ConflictError } from '../../src/domain/errors';
+import { MAX_LIST_RESULTS } from '../../src/application/ports/limits';
 import { PrismaCategoryRepository } from '../../src/infrastructure/prisma/prisma-category.repository';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { PrismaUserRepository } from '../../src/infrastructure/prisma/prisma-user.repository';
@@ -100,6 +101,18 @@ describe('PrismaCategoryRepository (Postgres)', () => {
     await repo.save(cat('c3', 'alpha', 'u1'));
     const names = (await repo.listVisibleTo('u1')).map((c) => c.name);
     expect(names).toEqual(['alpha', 'Food', 'Zebra']);
+  });
+
+  it('caps listVisibleTo at MAX_LIST_RESULTS rows (no pagination yet)', async () => {
+    await prisma.client.category.createMany({
+      data: Array.from({ length: MAX_LIST_RESULTS + 5 }, (_, i) => ({
+        id: `g${i}`,
+        name: `g${i}`,
+        nameKey: `g${i}`,
+        ownerId: null,
+      })),
+    });
+    expect(await repo.listVisibleTo('u1')).toHaveLength(MAX_LIST_RESULTS);
   });
 
   it('countOwnedBy counts only the personal categories of that user', async () => {

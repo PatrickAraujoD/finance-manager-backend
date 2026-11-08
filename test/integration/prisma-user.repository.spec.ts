@@ -1,6 +1,7 @@
 import { Email } from '../../src/domain/email';
 import { User } from '../../src/domain/entities/user';
 import { ConflictError } from '../../src/domain/errors';
+import { MAX_LIST_RESULTS } from '../../src/application/ports/limits';
 import { PrismaUserRepository } from '../../src/infrastructure/prisma/prisma-user.repository';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { cleanDatabase, createPrismaService } from './support/prisma-test-context';
@@ -63,6 +64,19 @@ describe('PrismaUserRepository (Postgres)', () => {
     expect(listed[0].createdAt).toBeInstanceOf(Date);
     expect(listed[0].createdAt!.getTime()).toBeLessThan(listed[1].createdAt!.getTime());
     expect((await repo.findById('u1'))?.createdAt).toEqual(listed[1].createdAt);
+  });
+
+  it('caps the listing at MAX_LIST_RESULTS rows (no pagination yet)', async () => {
+    await prisma.client.user.createMany({
+      data: Array.from({ length: MAX_LIST_RESULTS + 5 }, (_, i) => ({
+        id: `bulk${i}`,
+        name: 'n',
+        email: `bulk${i}@x.com`,
+        passwordHash: 'h',
+        role: 'N' as const,
+      })),
+    });
+    expect(await repo.list()).toHaveLength(MAX_LIST_RESULTS);
   });
 
   it('lists all users', async () => {
