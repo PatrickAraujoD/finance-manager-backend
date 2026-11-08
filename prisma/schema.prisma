@@ -58,13 +58,14 @@ model Category {
   @@unique([ownerId, nameKey])
 }
 
-// Only the schema for now (the repository comes with the expenses task); it makes the category
-// "in use" check and the delete restriction real.
+// receiptId is UNIQUE: one receipt backs at most one expense. Postgres treats NULLs as distinct,
+// so any number of manual expenses (receiptId NULL) is fine. CHECK amountCents > 0 lives in the
+// migration SQL.
 model Expense {
   id          String   @id
   userId      String
   categoryId  String
-  receiptId   String?
+  receiptId   String?  @unique
   // Integer cents; BigInt so any safe integer fits.
   amountCents BigInt
   paidAlone   Boolean
@@ -109,7 +110,7 @@ model Receipt {
   suggestedAmountCents BigInt?
   createdAt            DateTime  @default(now())
   user                 User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  expenses             Expense[]
+  expense              Expense?
 
   @@index([userId])
 }
