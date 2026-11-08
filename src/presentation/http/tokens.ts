@@ -7,3 +7,7 @@ export const CLOCK = Symbol('CLOCK');
 export const ID_GENERATOR = Symbol('ID_GENERATOR');
 export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');
 export const INCOME_REPOSITORY = Symbol('INCOME_REPOSITORY');
+export const RECEIPT_REPOSITORY = Symbol('RECEIPT_REPOSITORY');
+export const FILE_STORAGE = Symbol('FILE_STORAGE');
+export const FILE_TYPE_DETECTOR = Symbol('FILE_TYPE_DETECTOR');
+export const RECEIPT_EXTRACTOR = Symbol('RECEIPT_EXTRACTOR');

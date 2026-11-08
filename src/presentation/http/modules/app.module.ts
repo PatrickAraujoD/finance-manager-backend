@@ -8,12 +8,17 @@ import { RolesGuard } from '../guards/roles.guard';
 import {
   LOGIN_EMAIL_THROTTLE_KEY,
   STRICT_THROTTLE_KEY,
+  UPLOAD_THROTTLE_KEY,
 } from '../decorators/strict-throttle.decorator';
+import { TokenService } from '../../../application/ports/token-service';
 import { loginThrottleKey } from '../login-throttle-key';
+import { uploadThrottleKey } from '../upload-throttle-key';
+import { TOKEN_SERVICE } from '../tokens';
 import { AuthModule } from './auth.module';
 import { CategoriesModule } from './categories.module';
 import { CoreModule } from './core.module';
 import { IncomeModule } from './income.module';
+import { ReceiptsModule } from './receipts.module';
 import { UsersModule } from './users.module';
 
 @Module({})
@@ -28,29 +33,42 @@ export class AppModule {
         UsersModule,
         CategoriesModule,
         IncomeModule,
-        ThrottlerModule.forRoot({
-          throttlers: [
-            { name: 'default', ttl, limit: config.throttleLimit },
-            {
-              // Only routes marked with @StrictThrottle() (login, register, refresh).
-              name: 'strict',
-              ttl,
-              limit: config.authThrottleLimit,
-              skipIf: (ctx) => !Reflect.getMetadata(STRICT_THROTTLE_KEY, ctx.getHandler()),
-            },
-            {
-              // Login only: IP + normalized email, so one account cannot be brute forced.
-              name: 'loginEmail',
-              ttl,
-              limit: config.loginEmailThrottleLimit,
-              skipIf: (ctx) => !Reflect.getMetadata(LOGIN_EMAIL_THROTTLE_KEY, ctx.getHandler()),
-              getTracker: (req) =>
-                loginThrottleKey(
-                  req.ip as string | undefined,
-                  (req.body as { email?: unknown } | undefined)?.email,
-                ),
-            },
-          ],
+        ReceiptsModule,
+        ThrottlerModule.forRootAsync({
+          inject: [TOKEN_SERVICE],
+          useFactory: (tokens: TokenService) => ({
+            throttlers: [
+              { name: 'default', ttl, limit: config.throttleLimit },
+              {
+                // Only routes marked with @StrictThrottle() (login, register, refresh).
+                name: 'strict',
+                ttl,
+                limit: config.authThrottleLimit,
+                skipIf: (ctx) => !Reflect.getMetadata(STRICT_THROTTLE_KEY, ctx.getHandler()),
+              },
+              {
+                // Login only: IP + normalized email, so one account cannot be brute forced.
+                name: 'loginEmail',
+                ttl,
+                limit: config.loginEmailThrottleLimit,
+                skipIf: (ctx) => !Reflect.getMetadata(LOGIN_EMAIL_THROTTLE_KEY, ctx.getHandler()),
+                getTracker: (req) =>
+                  loginThrottleKey(
+                    req.ip as string | undefined,
+                    (req.body as { email?: unknown } | undefined)?.email,
+                  ),
+              },
+              {
+                // Receipt uploads only: per authenticated user (IP when anonymous).
+                name: 'upload',
+                ttl,
+                limit: config.uploadThrottleLimit,
+                skipIf: (ctx) => !Reflect.getMetadata(UPLOAD_THROTTLE_KEY, ctx.getHandler()),
+                getTracker: (req) =>
+                  uploadThrottleKey(tokens, req.headers?.authorization, req.ip as string | undefined),
+              },
+            ],
+          }),
         }),
       ],
       controllers: [HealthController],
