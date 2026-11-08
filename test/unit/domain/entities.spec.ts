@@ -1,6 +1,6 @@
 import { inspect } from 'util';
 import { Category } from '../../../src/domain/entities/category';
-import { Expense } from '../../../src/domain/entities/expense';
+import { Expense, MAX_EXPENSE_CENTS } from '../../../src/domain/entities/expense';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
 import { Receipt } from '../../../src/domain/entities/receipt';
 import { RefreshToken } from '../../../src/domain/entities/refresh-token';
@@ -38,6 +38,16 @@ describe('Expense', () => {
     expect(() => Expense.create({ ...expenseProps, amount: Money.fromCents(cents) })).toThrow(
       ValidationError,
     );
+  });
+
+  it('accepts exactly MAX_EXPENSE_CENTS (R$ 10 million) and rejects one cent more', () => {
+    expect(MAX_EXPENSE_CENTS).toBe(1_000_000_000);
+    expect(
+      Expense.create({ ...expenseProps, amount: Money.fromCents(MAX_EXPENSE_CENTS) }).amount.cents,
+    ).toBe(MAX_EXPENSE_CENTS);
+    expect(() =>
+      Expense.create({ ...expenseProps, amount: Money.fromCents(MAX_EXPENSE_CENTS + 1) }),
+    ).toThrow(ValidationError);
   });
 
   it('rejects an invalid spentAt date', () => {
