@@ -4,7 +4,7 @@ import { Expense } from '../../../src/domain/entities/expense';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
 import { RefreshToken } from '../../../src/domain/entities/refresh-token';
 import { User } from '../../../src/domain/entities/user';
-import { NotFoundError, UnauthorizedError } from '../../../src/domain/errors';
+import { NotFoundError, UnauthorizedError, ValidationError } from '../../../src/domain/errors';
 import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from '../../support/fakes/fake-category-repository';
 import { FakeExpenseRepository } from '../../support/fakes/fake-expense-repository';
@@ -88,6 +88,17 @@ describe('FakeExpenseRepository', () => {
   });
 });
 
+describe('FakeExpenseRepository ordering', () => {
+  it('listByUser orders by spentAt desc, then id desc', async () => {
+    const repo = new FakeExpenseRepository();
+    const old = expense('z', 'u1', 'c1', 100, '2026-11-01T00:00:00Z');
+    const newA = expense('a', 'u1', 'c1', 100, '2026-11-05T00:00:00Z');
+    const newB = expense('b', 'u1', 'c1', 100, '2026-11-05T00:00:00Z');
+    for (const e of [old, newA, newB]) await repo.save(e);
+    expect((await repo.listByUser('u1', {})).map((e) => e.id)).toEqual(['b', 'a', 'z']);
+  });
+});
+
 describe('FakeIncomeRepository', () => {
   it('upsert replaces the value for the same user and month', async () => {
     const repo = new FakeIncomeRepository();
@@ -119,6 +130,25 @@ describe('FakeRefreshTokenRepository', () => {
     expect((await repo.findByHash('h-2'))?.revokedAt).not.toBeNull();
     expect((await repo.findByHash('h-3'))?.revokedAt).toBeNull();
     expect(await repo.findByHash('missing')).toBeNull();
+  });
+
+  it('revokeAllByUser revokes every active token of that user only', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    const mk = (id: string, userId: string) =>
+      RefreshToken.create({
+        id,
+        userId,
+        familyId: `f-${id}`,
+        tokenHash: `h-${id}`,
+        expiresAt: new Date('2027-01-01T00:00:00Z'),
+      });
+    await repo.save(mk('1', 'u1'));
+    await repo.save(mk('2', 'u1'));
+    await repo.save(mk('3', 'u2'));
+    await repo.revokeAllByUser('u1');
+    expect((await repo.findByHash('h-1'))?.revokedAt).not.toBeNull();
+    expect((await repo.findByHash('h-2'))?.revokedAt).not.toBeNull();
+    expect((await repo.findByHash('h-3'))?.revokedAt).toBeNull();
   });
 });
 
@@ -189,11 +219,19 @@ describe('FakeTokenService', () => {
 describe('FakeFileStorage', () => {
   it('saves, reads and deletes; reading a missing key throws NotFoundError', async () => {
     const storage = new FakeFileStorage();
-    const key = await storage.save(Buffer.from('abc'), '.pdf');
-    expect(key.endsWith('.pdf')).toBe(true);
+    const key = await storage.save(Buffer.from('abc'), 'pdf');
+    expect(key.endsWith('pdf')).toBe(true);
     expect((await storage.read(key)).toString()).toBe('abc');
     await storage.delete(key);
     await expect(storage.read(key)).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('FakeFileStorage ext validation', () => {
+  it.each(['.pdf', '', 'PDF', 'toolong', 'p/f', 'p df'])('rejects ext %p', async (ext) => {
+    await expect(new FakeFileStorage().save(Buffer.from('x'), ext)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
   });
 });
 
