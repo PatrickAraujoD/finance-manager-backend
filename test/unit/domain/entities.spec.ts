@@ -1,3 +1,4 @@
+import { inspect } from 'util';
 import { Category } from '../../../src/domain/entities/category';
 import { Expense } from '../../../src/domain/entities/expense';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
@@ -113,6 +114,37 @@ describe('User', () => {
     expect(reset.failedLogins).toBe(0);
     expect(reset.lockedUntil).toBeNull();
     expect(reset.isLocked(now)).toBe(false);
+  });
+});
+
+describe('User secrecy and updates', () => {
+  const secret = 'SENTINEL-HASH-9f8e7d';
+
+  it('never leaks the password hash through serialization', () => {
+    const u = User.create({ ...userProps, passwordHash: secret });
+    expect(JSON.stringify(u)).not.toContain(secret);
+    expect(String(u)).not.toContain(secret);
+    expect(inspect(u, { depth: 5 })).not.toContain(secret);
+    expect(inspect(u.registerFailedLogin(new Date(), 5, 15), { depth: 5 })).not.toContain(secret);
+  });
+
+  it('still exposes the hash through the explicit getter', () => {
+    expect(User.create({ ...userProps, passwordHash: secret }).passwordHash).toBe(secret);
+  });
+
+  it('withRole returns a new instance with the role changed', () => {
+    const u = User.create(userProps);
+    const admin = u.withRole('A');
+    expect(admin.role).toBe('A');
+    expect(u.role).toBe('N');
+    expect(admin.id).toBe(u.id);
+  });
+
+  it('withActive returns a new instance with active changed', () => {
+    const u = User.create(userProps);
+    const off = u.withActive(false);
+    expect(off.active).toBe(false);
+    expect(u.active).toBe(true);
   });
 });
 
