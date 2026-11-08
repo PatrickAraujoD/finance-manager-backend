@@ -19,6 +19,19 @@ export class FakeRefreshTokenRepository implements RefreshTokenRepository {
     this.items.set(id, t.revoke(now));
     return true;
   }
+  /** Synchronous body (no awaits), so it is atomic under the event loop; throws before mutating. */
+  async rotate(oldId: string, replacement: RefreshToken, now: Date): Promise<boolean> {
+    const old = this.items.get(oldId);
+    if (!old || old.revokedAt !== null) return false;
+    for (const t of this.items.values()) {
+      if (t.id === replacement.id || t.tokenHash === replacement.tokenHash) {
+        throw new Error('Duplicate refresh token');
+      }
+    }
+    this.items.set(oldId, old.revoke(now));
+    this.items.set(replacement.id, replacement);
+    return true;
+  }
   async revokeFamily(familyId: string): Promise<void> {
     for (const [id, t] of this.items) {
       if (t.familyId === familyId && t.revokedAt === null) this.items.set(id, t.revoke(this.now()));

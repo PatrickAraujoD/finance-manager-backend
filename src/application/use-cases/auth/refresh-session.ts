@@ -4,7 +4,7 @@ import { IdGenerator } from '../../ports/id-generator';
 import { RefreshTokenRepository } from '../../ports/refresh-token-repository';
 import { TokenService } from '../../ports/token-service';
 import { UserRepository } from '../../ports/user-repository';
-import { issueSession, SessionTokens } from './issue-session';
+import { buildRefreshToken, SessionTokens } from './issue-session';
 import { INVALID_CREDENTIALS_MESSAGE } from './login';
 
 export interface RefreshSessionInput {
@@ -38,15 +38,20 @@ export class RefreshSession {
       throw this.invalid();
     }
 
-    // Atomic claim: if a concurrent refresh already consumed this token, treat it as reuse.
-    if (!(await this.refreshTokens.revokeIfActive(stored.id, now))) {
+    // Sign first: if it fails, nothing was rotated and the session is not lost.
+    const accessToken = await this.tokens.signAccess({ sub: user.id, role: user.role });
+    const next = buildRefreshToken(this.tokens, {
+      userId: user.id,
+      tokenId: this.ids.next(),
+      familyId: stored.familyId,
+      now,
+    });
+    // Atomic rotation: if a concurrent refresh already consumed this token, treat it as reuse.
+    if (!(await this.refreshTokens.rotate(stored.id, next.entity, now))) {
       await this.refreshTokens.revokeFamily(stored.familyId);
       throw this.invalid();
     }
-    return issueSession(
-      { refreshTokens: this.refreshTokens, tokens: this.tokens },
-      { user, tokenId: this.ids.next(), familyId: stored.familyId, now },
-    );
+    return { accessToken, refreshToken: next.plain };
   }
 
   private invalid(): UnauthorizedError {

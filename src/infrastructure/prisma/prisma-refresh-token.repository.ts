@@ -45,6 +45,10 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
     return count === 1;
   }
 
+  async rotate(): Promise<boolean> {
+    throw new Error('Not implemented');
+  }
+
   async revokeFamily(familyId: string): Promise<void> {
     await this.prisma.client.refreshToken.updateMany({
       where: { familyId, revokedAt: null },
