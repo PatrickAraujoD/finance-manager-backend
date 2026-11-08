@@ -7,11 +7,13 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { MulterError } from 'multer';
 import {
   ConflictError,
   DomainError,
   ForbiddenError,
   NotFoundError,
+  StoredFileMissingError,
   UnauthorizedError,
   ValidationError,
 } from '../../../domain/errors';
@@ -63,8 +65,19 @@ export class DomainErrorFilter implements ExceptionFilter {
     if (e instanceof ValidationError) return { status: 400, payload: body(400, e.message) };
     if (e instanceof UnauthorizedError) return { status: 401, payload: body(401) };
     if (e instanceof ForbiddenError) return { status: 403, payload: body(403) };
+    if (e instanceof StoredFileMissingError) {
+      // The client only sees a plain 404; the operator learns that a file is gone (no path).
+      this.logger.warn(e.message);
+      return { status: 404, payload: body(404) };
+    }
     if (e instanceof NotFoundError) return { status: 404, payload: body(404) };
     if (e instanceof ConflictError) return { status: 409, payload: body(409, e.message) };
+
+    if (e instanceof MulterError) {
+      // The message and field name come from the client: never echoed.
+      const status = e.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+      return { status, payload: body(status) };
+    }
 
     if (e instanceof BadRequestException) {
       // Pipe errors list the failing constraints (property names only, never the values).
