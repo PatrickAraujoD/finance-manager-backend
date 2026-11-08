@@ -61,6 +61,14 @@ export default tseslint.config(
     },
   },
   {
+    // Node CLI scripts (CommonJS, run with plain `node`).
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', require: 'readonly', module: 'writable' },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['src/domain/**/*.ts', 'src/application/**/*.ts'],
     rules: {
       'no-restricted-imports': [
