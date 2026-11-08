@@ -1,3 +1,7 @@
+import { CategoryReport } from '../../application/use-cases/reports/by-category';
+import { DayReport } from '../../application/use-cases/reports/by-day';
+import { IncomeVsSpentReport } from '../../application/use-cases/reports/income-vs-spent';
+import { EvolutionReport } from '../../application/use-cases/reports/monthly-evolution';
 import { formatCalendarDate } from '../../domain/calendar-date';
 import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
@@ -58,5 +62,72 @@ export function toExpenseView(expense: Expense): ExpenseView {
     spentAt: formatCalendarDate(expense.spentAt),
     description: expense.description ?? null,
     createdAt: expense.createdAt,
+  };
+}
+
+export interface CategoryReportView {
+  month: string;
+  totalCents: number;
+  items: { categoryId: string; categoryName: string; totalCents: number; percentage: number }[];
+}
+
+export function toCategoryReportView(report: CategoryReport): CategoryReportView {
+  return {
+    month: report.month,
+    totalCents: report.totalCents,
+    items: report.items.map((i) => ({
+      categoryId: i.categoryId,
+      categoryName: i.categoryName,
+      totalCents: i.totalCents,
+      percentage: i.percentage,
+    })),
+  };
+}
+
+export interface DayReportView {
+  month: string;
+  days: { date: string; totalCents: number }[];
+  topDay: { date: string; totalCents: number } | null;
+}
+
+export function toDayReportView(report: DayReport): DayReportView {
+  return {
+    month: report.month,
+    days: report.days.map((d) => ({ date: d.date, totalCents: d.totalCents })),
+    topDay: report.topDay
+      ? { date: report.topDay.date, totalCents: report.topDay.totalCents }
+      : null,
+  };
+}
+
+export interface EvolutionReportView {
+  from: string;
+  to: string;
+  months: { month: string; totalCents: number }[];
+}
+
+export function toEvolutionReportView(report: EvolutionReport): EvolutionReportView {
+  return {
+    from: report.from,
+    to: report.to,
+    months: report.months.map((m) => ({ month: m.month, totalCents: m.totalCents })),
+  };
+}
+
+export interface IncomeVsSpentView {
+  month: string;
+  incomeCents: number | null;
+  spentCents: number;
+  remainingCents: number | null;
+  percentSpent: number | null;
+}
+
+export function toIncomeVsSpentView(report: IncomeVsSpentReport): IncomeVsSpentView {
+  return {
+    month: report.month,
+    incomeCents: report.incomeCents,
+    spentCents: report.spentCents,
+    remainingCents: report.remainingCents,
+    percentSpent: report.percentSpent,
   };
 }

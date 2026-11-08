@@ -20,6 +20,7 @@ import { CoreModule } from './core.module';
 import { ExpensesModule } from './expenses.module';
 import { IncomeModule } from './income.module';
 import { ReceiptsModule } from './receipts.module';
+import { ReportsModule } from './reports.module';
 import { UsersModule } from './users.module';
 
 @Module({})
@@ -36,6 +37,7 @@ export class AppModule {
         ExpensesModule,
         IncomeModule,
         ReceiptsModule,
+        ReportsModule,
         ThrottlerModule.forRootAsync({
           inject: [TOKEN_SERVICE],
           useFactory: (tokens: TokenService) => ({

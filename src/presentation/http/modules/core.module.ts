@@ -6,6 +6,7 @@ import { Argon2Hasher } from '../../../infrastructure/hashing/argon2-hasher';
 import { PrismaCategoryRepository } from '../../../infrastructure/prisma/prisma-category.repository';
 import { PrismaExpenseRepository } from '../../../infrastructure/prisma/prisma-expense.repository';
 import { PrismaIncomeRepository } from '../../../infrastructure/prisma/prisma-income.repository';
+import { PrismaReportRepository } from '../../../infrastructure/prisma/prisma-report.repository';
 import { PrismaReceiptRepository } from '../../../infrastructure/prisma/prisma-receipt.repository';
 import { PrismaRefreshTokenRepository } from '../../../infrastructure/prisma/prisma-refresh-token.repository';
 import { PrismaUserRepository } from '../../../infrastructure/prisma/prisma-user.repository';
@@ -22,6 +23,7 @@ import {
   PASSWORD_HASHER,
   RECEIPT_REPOSITORY,
   REFRESH_TOKEN_REPOSITORY,
+  REPORT_REPOSITORY,
   TOKEN_SERVICE,
   USER_REPOSITORY,
 } from '../tokens';
@@ -73,6 +75,11 @@ export class CoreModule {
           useFactory: (prisma: NestPrismaService) => new PrismaReceiptRepository(prisma),
         },
         {
+          provide: REPORT_REPOSITORY,
+          inject: [NestPrismaService],
+          useFactory: (prisma: NestPrismaService) => new PrismaReportRepository(prisma),
+        },
+        {
           provide: REFRESH_TOKEN_REPOSITORY,
           inject: [NestPrismaService],
           useFactory: (prisma: NestPrismaService) => new PrismaRefreshTokenRepository(prisma),
@@ -89,6 +96,7 @@ export class CoreModule {
         EXPENSE_REPOSITORY,
         INCOME_REPOSITORY,
         RECEIPT_REPOSITORY,
+        REPORT_REPOSITORY,
         REFRESH_TOKEN_REPOSITORY,
       ],
     };
