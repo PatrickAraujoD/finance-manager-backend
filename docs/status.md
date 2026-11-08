@@ -1,0 +1,79 @@
+# Status do projeto (visao do CTO)
+
+Ultima atualizacao: 2026-11-08. Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
+
+## Quadro de tarefas
+
+| # | Tarefa | Estado |
+|---|---|---|
+| 1 | Scaffold, fronteiras de camada, commitlint e husky | aprovada |
+| 2 | Dominio base (Money, Email, Role, erros) | aprovada |
+| 3 | Entidades e portas | aprovada |
+| 4 | Autenticacao (register, login, refresh rotativo, logout) | aprovada |
+| 5 | Usuarios (admin) e Categorias | aprovada |
+| 6 | Renda mensal | aprovada |
+| 7 | Comprovantes e extracao (PDF, OCR), Partes A e B | aprovada |
+| 8 | Gastos | aprovada |
+| 9 | Relatorios (4 endpoints) | em correcao apos review |
+| 10 | Endurecimento e fechamento (matriz de autorizacao, README final, fluxo manual) | pendente |
+| - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps, ainda nao executado (`docs/pipeline-status.md`) |
+
+## Decisoes-chave
+
+- **Arquitetura limpa em 4 camadas** (`domain` <- `application` <- `infrastructure`/`presentation`),
+  imposta pelo lint (`eslint-plugin-boundaries`): domain/application nao importam Nest, Prisma nem
+  libs de infra.
+- **Money proprio** sobre inteiro em centavos, em vez de dinero.js (ESM-only, incompativel com o
+  Jest CJS). Nunca ha `number` float em regra de negocio; BIGINT no banco com erro (nunca
+  arredondamento) acima do inteiro seguro.
+- **`file-type` removido:** travava o event loop com ASF malformado e lancava erro em TIFF/PNG
+  curtos. Hoje a deteccao e por assinatura (magic bytes) propria.
+- **PDF em processo filho descartavel** (substituiu `worker_threads`, que vazava ~7 MB por execucao
+  e nao limitava memoria real), com vigia de RSS lendo `/proc` ou `ps` (falha fechada) e por isso
+  `procps` na imagem Docker.
+- **OCR** com `tesseract.js` (dados `por` locais), no maximo 2 simultaneos, imagem limitada a 25 MP;
+  falha de extracao devolve `suggestedAmountCents: null`, nunca 500. O valor e so sugestao: o gasto
+  sempre usa o `amountCents` confirmado pelo usuario.
+- **Guard global fail-closed:** `JwtAuthGuard` e `RolesGuard` como `APP_GUARD`; toda rota e privada
+  salvo `@Public()`. Publicas hoje: `/health` e `/auth/{register,login,refresh,logout}`, travadas
+  por teste e2e.
+- **Autorizacao nos casos de uso**, nao so em guards; admin NAO le gastos/salario de terceiros;
+  recurso alheio responde 404 identico ao inexistente.
+- **`spentAt` e uma DATA de calendario** guardada como `Date` 00:00 UTC (evita deslocar compras por
+  fuso); agrupamentos e filtros em UTC.
+- **Auth:** access token 15 min; refresh opaco, rotativo, so o hash no banco; reuso revoga a
+  familia; throttle de login por IP e por IP+e-mail normalizado.
+- **`TRUST_PROXY`** so `false` ou inteiro >= 1; `true`/`0` derrubam a subida.
+- **Validacao:** `ValidationError` do dominio vira 400 (nunca 422); texto sem NUL, surrogates soltos
+  e caracteres de controle; teto de valores tambem em CHECK no banco.
+- **Relatorios:** `GROUP BY` no Postgres via `Prisma.sql` parametrizado, uma consulta por relatorio,
+  percentuais em BigInt pelo metodo do maior resto (soma exatamente 100).
+- **Commits:** Conventional Commits sem escopo, sem rodape de coautoria, validados por commitlint
+  local (husky) e no CI.
+- **Riscos de dependencia aceitos** com prazo (`image-size`, `deepmerge-ts`/prisma): ver
+  `scripts/audit-gate.js`.
+
+## Pendencias e donos
+
+| Pendencia | Dono |
+|---|---|
+| Fechar as correcoes de review da Tarefa 9 e reexecutar as tres suites | implementer |
+| Tarefa 10: matriz de autorizacao e2e, README final, fluxo manual com curl | implementer |
+| Primeiro push e primeiro run do CI; corrigir o que falhar | usuario (push) + devops |
+| Ligar branch protection no `main` | usuario |
+| Construir e testar a imagem Docker; definir ambiente de producao e CD | devops (apos decisao do usuario sobre hospedagem) |
+| Encerrar processos jest travados PIDs 96469/96489 | usuario |
+| Revisar advisories aceitos ate 2027-02-08; avaliar Prisma 7 | devops + CTO |
+
+## Requisitos futuros reportados pelos reviewers
+
+- **Semaforo de PDF/OCR com degradacao cruzada:** hoje PDF e OCR competem por recursos; sob carga
+  um tipo pode degradar o outro (retornando `null`). Avaliar semaforos/filas separados por tipo.
+- **Paginacao** de `GET /users` e `GET /categories` (hoje limitados a 500 resultados).
+- **`TRUST_PROXY` em deploy:** definir o numero exato de saltos do ambiente real.
+- **CHECK/limite de quantidade:** limites de quantidade por usuario (comprovantes, gastos,
+  categorias) e CHECKs adicionais no banco, alem dos tetos de valor ja existentes.
+- Poliglotas (arquivo valido como PDF/PNG/JPEG e como HTML/JS): ja mitigado servindo sempre com
+  tipo do banco, `nosniff` e `attachment`; manter o teste.
+- Armazenamento de comprovantes com varias replicas (storage compartilhado/objeto) e backup.
+- Migrations compativeis com rollback quando houver CD.
