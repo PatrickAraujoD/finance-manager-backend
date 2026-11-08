@@ -15,7 +15,8 @@ function toDomain(row: ExpenseRow): Expense {
   // Writes go through the domain, so this only trips on data written behind its back. Never
   // round a BIGINT: an unsafe value is an error.
   if (row.amountCents > MAX_SAFE) {
-    throw new Error('Stored expense is not a safe integer amount of cents');
+    // The id goes only to the internal log (the filter answers a generic 500).
+    throw new Error(`Stored expense ${row.id} is not a safe integer amount of cents`);
   }
   return Expense.create({
     id: row.id,
