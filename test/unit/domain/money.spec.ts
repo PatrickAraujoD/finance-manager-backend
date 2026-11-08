@@ -1,4 +1,3 @@
-import numbro from "numbro";
 import { ValidationError } from "../../../src/domain/errors";
 import { Money } from "../../../src/domain/money";
 
@@ -19,10 +18,6 @@ describe("Money", () => {
 
   it("normalizes negative zero", () => {
     expect(Object.is(Money.fromCents(-0).cents, 0)).toBe(true);
-  });
-
-  it("does not change the global numbro language", () => {
-    expect(numbro.language()).toBe("en-US");
   });
 
   it("adds and subtracts", () => {

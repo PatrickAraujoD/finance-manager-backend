@@ -1,12 +1,3 @@
-import {
-  BRL,
-  add,
-  dinero,
-  equal,
-  subtract,
-  toSnapshot,
-  type Dinero,
-} from "dinero.js";
 import { ValidationError } from "./errors";
 
 // Strict pt-BR: optional "R$", thousands with ".", decimals with ",".
@@ -14,15 +5,14 @@ import { ValidationError } from "./errors";
 const BRL_PATTERN = /^(?:R\$\s*)?(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/;
 
 export class Money {
-  private constructor(private readonly value: Dinero<number>) {}
+  private constructor(private readonly value: number) {}
 
   static fromCents(cents: number): Money {
     if (!Number.isSafeInteger(cents)) {
       throw new ValidationError("Money must be a safe integer amount of cents");
     }
-    return new Money(
-      dinero({ amount: cents === 0 ? 0 : cents, currency: BRL }),
-    );
+    // `+ 0` turns -0 into 0
+    return new Money(cents + 0);
   }
 
   static parseBRL(text: string): Money | null {
@@ -35,22 +25,22 @@ export class Money {
   }
 
   get cents(): number {
-    return toSnapshot(this.value).amount;
+    return this.value;
   }
 
   add(other: Money): Money {
-    return new Money(add(this.value, other.value));
+    return Money.fromCents(this.value + other.value);
   }
 
   subtract(other: Money): Money {
-    return new Money(subtract(this.value, other.value));
+    return Money.fromCents(this.value - other.value);
   }
 
   isNegative(): boolean {
-    return this.cents < 0;
+    return this.value < 0;
   }
 
   equals(other: Money): boolean {
-    return equal(this.value, other.value);
+    return this.value === other.value;
   }
 }
