@@ -10,6 +10,7 @@ const { findProblems } = require('../../scripts/check-secrets.js') as {
 const awsKey = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
 const pem = ['-----BEGIN ', 'RSA PRIVATE KEY-----'].join('');
 const ghToken = ['ghp', '_', 'a'.repeat(36)].join('');
+const dbUrl = ['postgresql://app', ':', 'Zq8v2LmP9xKd', '@db.prod:5432/app'].join('');
 const jwtLike = ['eyJ', 'a'.repeat(20), '.eyJ', 'b'.repeat(20), '.', 'c'.repeat(20)].join('');
 
 describe('secrets check', () => {
@@ -25,7 +26,7 @@ describe('secrets check', () => {
     ['a private key block', `${pem}\nMIIB`],
     ['a GitHub token', `token: ${ghToken}`],
     ['a JWT', `Authorization: Bearer ${jwtLike}`],
-    ['a database URL with a real password', 'DATABASE_URL=postgresql://app:Zq8v2LmP9xKd@db.prod:5432/app'],
+    ['a database URL with a real password', `DATABASE_URL=${dbUrl}`],
   ])('flags %s in a tracked file', (_name, content) => {
     expect(findProblems([{ path: 'src/x.ts', content }])).toHaveLength(1);
   });
