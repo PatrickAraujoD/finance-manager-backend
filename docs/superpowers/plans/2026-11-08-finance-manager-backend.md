@@ -20,6 +20,7 @@
 - Autorização (dono do recurso / papel) é feita nos casos de uso, não só em guards.
 - Upload: máx. 5 MB; tipos PDF/PNG/JPEG validados por magic bytes; nome de arquivo aleatório.
 - Access token 15 min; refresh token rotativo, guardado só como hash; reuso de refresh revoga a família.
+- `Expense.spentAt` é uma DATA DE CALENDÁRIO guardada como `Date` às 00:00 UTC (decisão do CTO; evita deslocar compras de fuso). `Expense.create` normaliza para 00:00 UTC do mesmo dia UTC; agrupamentos por dia/mês e limites de filtro são feitos em UTC.
 - npm (pnpm ausente).
 - **Commits: Conventional Commits 1.0.0, estritamente**, validados por `commitlint` (`@commitlint/config-conventional`) num hook `commit-msg` do `husky`. Ver seção "Convenção de commits" abaixo.
 
@@ -142,7 +143,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 **Interfaces:**
 - Produces: `RegisterUser.execute({name,email,password}): Promise<{id}>` (senha mínima 12 chars; role sempre `'N'`; email duplicado → `ConflictError`); `Login.execute({email,password}): Promise<{accessToken, refreshToken}>`; `RefreshSession.execute({refreshToken})` retorna novo par; `Logout.execute({refreshToken})`. Constantes: 5 falhas → bloqueio 15 min. Decorator `@Roles('A')` + `JwtAuthGuard` expõem `req.user = {id, role}`. `DomainErrorFilter` mapeia erros de domínio → 400/401/403/404/409/422 sem stack.
 
-- [ ] **Step 1:** Testes unitários (fakes): register cria usuário `N` com hash (≠ senha); email duplicado em caixa diferente → `ConflictError`; senha curta → `ValidationError`; login ok devolve tokens; senha errada e usuário inexistente lançam o MESMO `UnauthorizedError` (mensagem genérica); 5ª falha bloqueia e login correto durante bloqueio falha; refresh rotaciona (token antigo vira revogado); **reuso de refresh antigo revoga a família** e o novo token também deixa de funcionar; logout revoga.
+- [ ] **Step 1:** Testes unitários (fakes): register cria usuário `N` com hash (≠ senha); email duplicado em caixa diferente → `ConflictError`; senha curta → `ValidationError`; login ok devolve tokens; senha errada e usuário inexistente lançam o MESMO `UnauthorizedError` (mensagem genérica); 5ª falha bloqueia e login correto durante bloqueio falha; **durante o bloqueio o caso de uso retorna o mesmo `UnauthorizedError` genérico SEM chamar `registerFailedLogin`** (o bloqueio não desliza); login e refresh também recusam usuário inativo (`active === false`); refresh rotaciona (token antigo vira revogado); **reuso de refresh antigo revoga a família** e o novo token também deixa de funcionar; logout revoga.
 - [ ] **Step 2:** Rodar e ver falhar; implementar os casos de uso; verde.
 - [ ] **Step 3:** Adaptadores: `Argon2Hasher` (argon2id), `JwtTokenService` (access 15 min; refresh = 48 bytes aleatórios via `crypto.randomBytes`, hash SHA-256 salvo), repositórios Prisma + migration (`User`, `RefreshToken`). Teste de integração do repositório contra o Postgres do Compose.
 - [ ] **Step 4:** Controller + DTOs (class-validator, whitelist, `forbidNonWhitelisted`), guards, filtro de erros; throttler global e limite mais baixo em `/auth/*`; `helmet`. E2E: registrar → login → rota protegida 200; sem token 401; token expirado 401; 6ª tentativa seguida de login em 1 min → 429.
@@ -156,7 +157,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 
 **Interfaces:**
 - Consumes: ports e guards da Task 4.
-- Produces: `ListUsers.execute(actor)` / `UpdateUser.execute(actor, id, {role?, active?})` (só admin; admin não pode se rebaixar nem desativar a si mesmo); `CreateCategory.execute(actor, {name, global?})` (`global` só admin); `ListCategories.execute(actor)` → globais + próprias; `UpdateCategory`/`DeleteCategory(actor, id)`: dono edita a própria, só admin edita global; excluir categoria em uso → `ConflictError`.
+- Produces: `ListUsers.execute(actor)` / `UpdateUser.execute(actor, id, {role?, active?})` (só admin; admin não pode se rebaixar nem desativar a si mesmo); `CreateCategory.execute(actor, {name, global?})` (`global` só admin); `ListCategories.execute(actor)` → globais + próprias; `UpdateCategory`/`DeleteCategory(actor, id)`: dono edita a própria, só admin edita global; excluir categoria em uso → `ConflictError`. Desativar um usuário (`active: false`) chama `RefreshTokenRepository.revokeAllByUser(id)`; refresh e login checam `active` e recusam usuário inativo.
 
 - [ ] **Step 1:** Testes unitários: `N` listando usuários → `ForbiddenError`; admin muda papel de outro; admin tentando desativar a si mesmo → erro; `N` criando categoria global → `ForbiddenError`; nome duplicado no mesmo escopo → `ConflictError`; usuário B editando categoria de A → `NotFoundError`; excluir em uso → `ConflictError`. Ver falhar.
 - [ ] **Step 2:** Implementar casos de uso e repositório Prisma (unique `(ownerId, name)`; atenção a `NULL` em `ownerId`: índice parcial único para globais, via SQL na migration). Verde.
