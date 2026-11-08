@@ -39,13 +39,32 @@ export async function flateBombPdf(gigabytes: number): Promise<Buffer> {
   return Buffer.concat([Buffer.from(head, 'latin1'), data, Buffer.from(tail, 'latin1')]);
 }
 
-/** Samples this process's RSS while it is running; `peakGrowthMb()` is the rise over the start. */
+/**
+ * Samples this process's RSS while it is running; `peakGrowthMb()` is the rise over a settled
+ * baseline. Use `RssSampler.start()`: the test itself has just produced (and dropped) hundreds of
+ * MB of zlib buffers, and a baseline read right then jumps around with garbage collection and with
+ * the other jest workers' load, which made a plain "rss now" start flaky.
+ */
 export class RssSampler {
-  private peak = process.memoryUsage().rss;
-  private readonly start = this.peak;
-  private readonly timer = setInterval(() => {
-    this.peak = Math.max(this.peak, process.memoryUsage().rss);
-  }, 25);
+  private peak: number;
+  private readonly timer: NodeJS.Timeout;
+
+  private constructor(private readonly baseline: number) {
+    this.peak = baseline;
+    this.timer = setInterval(() => {
+      this.peak = Math.max(this.peak, process.memoryUsage().rss);
+    }, 25);
+  }
+
+  /** Waits for memory to settle (highest of several reads over ~0.5 s) and starts sampling. */
+  static async start(): Promise<RssSampler> {
+    let baseline = process.memoryUsage().rss;
+    for (let i = 0; i < 5; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      baseline = Math.max(baseline, process.memoryUsage().rss);
+    }
+    return new RssSampler(baseline);
+  }
 
   stop(): void {
     clearInterval(this.timer);
@@ -53,6 +72,6 @@ export class RssSampler {
   }
 
   peakGrowthMb(): number {
-    return (this.peak - this.start) / 1024 / 1024;
+    return (this.peak - this.baseline) / 1024 / 1024;
   }
 }

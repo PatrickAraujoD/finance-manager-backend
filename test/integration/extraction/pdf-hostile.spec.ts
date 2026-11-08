@@ -25,7 +25,7 @@ describe('PdfTextExtractor against hostile PDFs', () => {
   it('survives a ~1 MB Flate bomb that inflates to 1 GiB, with the parent RSS flat', async () => {
     const bomb = await flateBombPdf(1);
     expect(bomb.length).toBeLessThan(2 * 1024 * 1024);
-    const sampler = new RssSampler();
+    const sampler = await RssSampler.start();
     const result = await new PdfTextExtractor().extract(bomb).catch(() => null);
     sampler.stop();
     expect(result === null || result.amount === null).toBe(true);
@@ -35,7 +35,7 @@ describe('PdfTextExtractor against hostile PDFs', () => {
   it('kills a PDF below 5 MB whose stream claims 4 GiB, in bounded time', async () => {
     const bomb = await flateBombPdf(4);
     expect(bomb.length).toBeLessThan(5 * 1024 * 1024);
-    const sampler = new RssSampler();
+    const sampler = await RssSampler.start();
     const started = Date.now();
     const result = await new PdfTextExtractor().extract(bomb).catch(() => null);
     sampler.stop();
@@ -72,7 +72,7 @@ describe('PdfTextExtractor against hostile PDFs', () => {
 
     it('fails closed: the child is killed at once and the Flate bomb stays bounded', async () => {
       const bomb = await flateBombPdf(1);
-      const sampler = new RssSampler();
+      const sampler = await RssSampler.start();
       const started = Date.now();
       const result = await new PdfTextExtractor().extract(bomb).catch(() => null);
       sampler.stop();
