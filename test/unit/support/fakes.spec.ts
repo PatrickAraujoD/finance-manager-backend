@@ -135,7 +135,7 @@ describe('FakeCategoryRepository', () => {
     expect(await repo.isInUse('g')).toBe(false);
     await expenses.save(expense('e1', 'u1', 'g', 100, '2026-11-01T00:00:00Z'));
     expect(await repo.isInUse('g')).toBe(true);
-    await expenses.delete('e1');
+    expect(await expenses.delete('u1', 'e1')).toBe(true);
     await repo.delete('g');
     expect(await repo.findById('g')).toBeNull();
   });
@@ -167,6 +167,84 @@ describe('FakeExpenseRepository ordering', () => {
     const newB = expense('b', 'u1', 'c1', 100, '2026-11-05T00:00:00Z');
     for (const e of [old, newA, newB]) await repo.save(e);
     expect((await repo.listByUser('u1', {})).map((e) => e.id)).toEqual(['b', 'a', 'z']);
+  });
+});
+
+describe('FakeExpenseRepository port contract', () => {
+  const withReceipt = (id: string, receiptId: string | null, userId = 'u1') =>
+    Expense.create({
+      id,
+      userId,
+      categoryId: 'c1',
+      receiptId,
+      amount: Money.fromCents(100),
+      paidAlone: true,
+      spentAt: new Date('2026-11-01T00:00:00Z'),
+    });
+
+  it('findById and delete are scoped to the owner', async () => {
+    const repo = new FakeExpenseRepository();
+    await repo.save(withReceipt('a', null));
+    expect(await repo.findById('u1', 'a')).not.toBeNull();
+    expect(await repo.findById('u2', 'a')).toBeNull();
+    expect(await repo.delete('u2', 'a')).toBe(false);
+    expect(await repo.findById('u1', 'a')).not.toBeNull();
+    expect(await repo.delete('u1', 'a')).toBe(true);
+    expect(await repo.delete('u1', 'a')).toBe(false);
+  });
+
+  it('save refuses a repeated id and a receipt that is already used', async () => {
+    const repo = new FakeExpenseRepository();
+    await repo.save(withReceipt('a', 'r1'));
+    await expect(repo.save(withReceipt('a', null))).rejects.toBeInstanceOf(ConflictError);
+    await expect(repo.save(withReceipt('b', 'r1'))).rejects.toBeInstanceOf(ConflictError);
+    await repo.save(withReceipt('c', null));
+    await repo.save(withReceipt('d', null));
+  });
+
+  it('update changes the editable fields only and reports a missing row', async () => {
+    const repo = new FakeExpenseRepository();
+    await repo.save(withReceipt('a', 'r1'));
+    const changed = Expense.create({
+      id: 'a',
+      userId: 'u2',
+      categoryId: 'c9',
+      receiptId: 'other',
+      amount: Money.fromCents(999),
+      paidAlone: false,
+      spentAt: new Date('2026-10-01T00:00:00Z'),
+      description: 'x',
+    });
+    expect(await repo.update(changed)).toBe(false);
+    expect(await repo.update(withReceipt('zzz', null))).toBe(false);
+    const own = Expense.create({
+      id: 'a',
+      userId: 'u1',
+      categoryId: 'c9',
+      receiptId: 'other',
+      amount: Money.fromCents(999),
+      paidAlone: false,
+      spentAt: new Date('2026-10-01T00:00:00Z'),
+      description: 'x',
+    });
+    expect(await repo.update(own)).toBe(true);
+    const stored = await repo.findById('u1', 'a');
+    expect(stored?.categoryId).toBe('c9');
+    expect(stored?.amount.cents).toBe(999);
+    expect(stored?.receiptId).toBe('r1');
+    expect(stored?.userId).toBe('u1');
+  });
+
+  it('pages the listing and counts the full filtered set', async () => {
+    const repo = new FakeExpenseRepository();
+    for (const id of ['a', 'b', 'c', 'd']) await repo.save(withReceipt(id, null));
+    await repo.save(withReceipt('x', null, 'u2'));
+    expect((await repo.listByUser('u1', {}, { limit: 2, offset: 1 })).map((e) => e.id)).toEqual([
+      'c',
+      'b',
+    ]);
+    expect(await repo.countByUser('u1', {})).toBe(4);
+    expect(await repo.countByUser('u1', { categoryId: 'nope' })).toBe(0);
   });
 });
 
