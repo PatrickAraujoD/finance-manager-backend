@@ -26,6 +26,7 @@ model User {
   refreshTokens RefreshToken[]
   categories    Category[]
   expenses      Expense[]
+  incomes       MonthlyIncome[]
 }
 
 model RefreshToken {
@@ -76,4 +77,20 @@ model Expense {
 
   @@index([userId, spentAt])
   @@index([categoryId])
+}
+
+// One income per user and month. Cascade: the row has no meaning without its user (unlike
+// expenses, which are protected with Restrict), so erasing a user erases the income.
+// CHECKs (month format, amount > 0) live in the migration SQL.
+model MonthlyIncome {
+  userId      String
+  // YYYY-MM
+  month       String
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents BigInt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, month])
 }
