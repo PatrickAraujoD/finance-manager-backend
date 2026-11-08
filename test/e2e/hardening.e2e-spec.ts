@@ -82,6 +82,43 @@ describe('final hardening', () => {
     });
   });
 
+  describe('conditional request headers are ignored', () => {
+    const conditions: [string, string][] = [
+      ['If-None-Match', '*'],
+      ['If-None-Match', 'W/"x"'],
+      ['If-None-Match', '"abc", W/"def"'],
+      ['If-Match', '*'],
+      ['If-Modified-Since', new Date(Date.now() + 86_400_000).toUTCString()],
+      ['If-Unmodified-Since', new Date(0).toUTCString()],
+      ['If-Range', 'W/"x"'],
+    ];
+    const gets: [string, (s: Session) => request.Test][] = [
+      ['/categories', (s) => http().get('/categories').set(...bearer(s))],
+      ['/expenses', (s) => http().get('/expenses').set(...bearer(s))],
+      ['/auth/me', (s) => http().get('/auth/me').set(...bearer(s))],
+      ['/health', () => http().get('/health')],
+    ];
+
+    it.each(conditions.flatMap(([h, v]) => gets.map(([r, call]) => [h, v, r, call] as const)))(
+      '%s: %s on GET %s never gives 304 or 412',
+      async (header, value, _route, call) => {
+        const res = await call(ana).set(header, value);
+        expect(res.status).toBe(200);
+        expect(res.headers['cache-control']).toMatch(/no-store/);
+      },
+    );
+
+    it('does not turn a write into 412 either', async () => {
+      const res = await http()
+        .post('/categories')
+        .set(...bearer(ana))
+        .set('If-Match', '"nope"')
+        .set('If-Unmodified-Since', new Date(0).toUTCString())
+        .send({ name: 'Cond' });
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe('CORS preflight', () => {
     it('gives an unlisted origin no allow headers (CORS_ORIGINS empty)', async () => {
       const res = await http()
