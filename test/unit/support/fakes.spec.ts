@@ -104,6 +104,30 @@ describe('FakeCategoryRepository', () => {
     expect(await repo.listVisibleTo('u1')).toEqual([global, mine]);
   });
 
+  it('save throws ConflictError for the same nameKey in the same scope, not across scopes', async () => {
+    const repo = new FakeCategoryRepository(new FakeExpenseRepository());
+    await repo.save(Category.create({ id: 'g', name: 'Food', ownerId: null }));
+    await repo.save(Category.create({ id: 'm', name: 'Food', ownerId: 'u1' }));
+    await repo.save(Category.create({ id: 'o', name: 'Food', ownerId: 'u2' }));
+    await expect(
+      repo.save(Category.create({ id: 'g2', name: ' FOOD ', ownerId: null })),
+    ).rejects.toBeInstanceOf(ConflictError);
+    await expect(
+      repo.save(Category.create({ id: 'm2', name: 'food', ownerId: 'u1' })),
+    ).rejects.toBeInstanceOf(ConflictError);
+    // Re-saving the same id (rename to itself) is an update, not a duplicate.
+    await expect(repo.save(Category.create({ id: 'm', name: 'FOOD', ownerId: 'u1' }))).resolves.toBeUndefined();
+  });
+
+  it('delete throws ConflictError while expenses reference the category (FK restrict)', async () => {
+    const expenses = new FakeExpenseRepository();
+    const repo = new FakeCategoryRepository(expenses);
+    await repo.save(Category.create({ id: 'g', name: 'Food', ownerId: null }));
+    await expenses.save(expense('e1', 'u1', 'g', 100, '2026-11-01T00:00:00Z'));
+    await expect(repo.delete('g')).rejects.toBeInstanceOf(ConflictError);
+    expect(await repo.findById('g')).not.toBeNull();
+  });
+
   it('isInUse reflects expenses and delete removes the category', async () => {
     const expenses = new FakeExpenseRepository();
     const repo = new FakeCategoryRepository(expenses);
@@ -111,6 +135,7 @@ describe('FakeCategoryRepository', () => {
     expect(await repo.isInUse('g')).toBe(false);
     await expenses.save(expense('e1', 'u1', 'g', 100, '2026-11-01T00:00:00Z'));
     expect(await repo.isInUse('g')).toBe(true);
+    await expenses.delete('e1');
     await repo.delete('g');
     expect(await repo.findById('g')).toBeNull();
   });
