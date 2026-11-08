@@ -26,6 +26,28 @@ guardado em `UPLOAD_DIR` (diretorio privado, 0700) com nome gerado; o nome envia
 nunca e usado. `GET /receipts/:id/file` so entrega ao dono (qualquer outro caso, admin incluso, e
 um 404 identico), com `Content-Type` vindo do banco, `nosniff`, `attachment` e `no-store`.
 
+## Gastos
+
+Todas as rotas exigem token e trabalham so com os gastos do proprio usuario (admin nao ve os de
+outros; gasto alheio e um 404 identico ao inexistente).
+
+- `POST /expenses` -> 201 `{id}`. Corpo: `categoryId` (UUID de categoria global ou propria),
+  `amountCents` (inteiro de 1 a 1000000000, SEMPRE o valor que o usuario confirmou, mesmo com
+  comprovante e mesmo com `paidAlone=false`), `paidAlone` (booleano), `spentAt` (`YYYY-MM-DD`,
+  data real, no maximo hoje + 1 dia em UTC), `receiptId` (opcional, UUID de comprovante proprio;
+  cada comprovante so pode ser usado por um gasto, senao 409) e `description` (opcional, ate 500
+  caracteres). Sem `receiptId` e um lancamento manual. Categoria ou comprovante de outro usuario
+  -> 404. Campos extras (`userId`, `id`, `createdAt`...) -> 400.
+- `GET /expenses?from=&to=&categoryId=&limit=&offset=` -> 200 `{items, total, limit, offset}`.
+  `from`/`to` inclusivos (`YYYY-MM-DD`, `from <= to`), `limit` 1 a 200 (padrao 100), `offset` 0 a
+  100000. Ordem: `spentAt` e `id` decrescentes.
+- `GET /expenses/:id`, `PATCH /expenses/:id` (parcial, ao menos um de `categoryId`, `amountCents`,
+  `spentAt`, `description`, `paidAlone`; `receiptId` e `userId` nao mudam e dao 400) e
+  `DELETE /expenses/:id` (204; o comprovante e o arquivo ficam, e o comprovante volta a poder ser
+  usado).
+- Resposta de um gasto: `id, categoryId, receiptId, amountCents, paidAlone, spentAt, description,
+  createdAt`. Excluir uma categoria usada por gastos responde 409 e nao apaga nada.
+
 ## Primeiro admin
 
 Registro publico sempre cria usuarios normais. O primeiro admin vem do seed, que le
