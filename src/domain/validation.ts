@@ -14,14 +14,41 @@ const CONTROL_MULTILINE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
 // Mn and never matched. Multiline kinds keep TAB (U+0009) and LF (U+000A).
 const STRICT = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 const STRICT_MULTILINE = /(?![\t\n])\p{Cc}|[\p{Cf}\p{Zl}\p{Zp}]/u;
-const NAME = /\p{Cc}|(?!\u200d)\p{Cf}|[\p{Zl}\p{Zp}]/u;
-const NAME_MULTILINE = /(?![\t\n])\p{Cc}|(?!\u200d)\p{Cf}|[\p{Zl}\p{Zp}]/u;
+// ZWNJ (U+200C) is Cf too, but it is handled apart (see `hasMisplacedZwnj`): excluded here.
+const NAME = /\p{Cc}|(?![\u200c\u200d])\p{Cf}|[\p{Zl}\p{Zp}]/u;
+const NAME_MULTILINE = /(?![\t\n])\p{Cc}|(?![\u200c\u200d])\p{Cf}|[\p{Zl}\p{Zp}]/u;
+
+/**
+ * Scripts whose orthography needs the zero width non-joiner (half space in Persian, Urdu and
+ * Kurdish; chillu and conjunct control in Indic scripts; Thai, Khmer and Myanmar word breaks).
+ * `scx` (Script_Extensions) also covers combining marks that Unicode files under several scripts.
+ */
+const ZWNJ_SCRIPT =
+  /^(?=[\p{L}\p{M}])[\p{scx=Arabic}\p{scx=Hebrew}\p{scx=Syriac}\p{scx=Thaana}\p{scx=Devanagari}\p{scx=Bengali}\p{scx=Gurmukhi}\p{scx=Gujarati}\p{scx=Oriya}\p{scx=Tamil}\p{scx=Telugu}\p{scx=Kannada}\p{scx=Malayalam}\p{scx=Sinhala}\p{scx=Thai}\p{scx=Lao}\p{scx=Khmer}\p{scx=Myanmar}]$/u;
+
+/**
+ * True when a ZWNJ is not strictly between two letters or marks of the scripts above: at the
+ * start or end, doubled, next to a space or digit, or next to a Latin, Cyrillic or Greek letter
+ * (where it would only hide a look-alike text).
+ */
+function hasMisplacedZwnj(value: string): boolean {
+  const chars = Array.from(value);
+  for (let i = 0; i < chars.length; i++) {
+    if (chars[i] !== '\u200c') continue;
+    const before = chars[i - 1];
+    const after = chars[i + 1];
+    if (before === undefined || after === undefined) return true;
+    if (!ZWNJ_SCRIPT.test(before) || !ZWNJ_SCRIPT.test(after)) return true;
+  }
+  return false;
+}
 const EMAIL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Zs}]/u;
 
 /**
  * What a text field may contain:
  * - `strict` (default; technical values): no Cc, Cf, Zl or Zp at all.
- * - `name` (user and category names): like strict but allows ZWJ and visible Unicode spaces.
+ * - `name` (user and category names): like strict but allows ZWJ, visible Unicode spaces and ZWNJ
+ *   only between two letters/marks of non Latin scripts (Persian, Indic, Thai...).
  * - `description`: like `name` and always keeps TAB and LF.
  * - `email`: no Cc, Cf, Zl, Zp or any Unicode space (Zs), without exception.
  * - `password` (registration): only C0/C1 controls, DEL, NUL and lone surrogates are refused.
@@ -45,7 +72,7 @@ export function hasUnsafeText(value: string, options: TextOptions = {}): boolean
       return EMAIL.test(value);
     case 'name':
     case 'description':
-      return (multiline ? NAME_MULTILINE : NAME).test(value);
+      return (multiline ? NAME_MULTILINE : NAME).test(value) || hasMisplacedZwnj(value);
     default:
       return (multiline ? STRICT_MULTILINE : STRICT).test(value);
   }
