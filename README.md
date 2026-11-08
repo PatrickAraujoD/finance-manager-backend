@@ -8,7 +8,18 @@ Copie `.env.example` para `.env`. Variaveis obrigatorias: `DATABASE_URL`, `JWT_A
 inteiro >= 1; `true` e `0` sao recusados na subida. Atras de proxy reverso use o numero exato de
 saltos confiaveis, pois define o IP usado no rate limit),
 `THROTTLE_TTL_SECONDS`, `THROTTLE_LIMIT`, `AUTH_THROTTLE_LIMIT` (por IP, padrao 20),
-`LOGIN_EMAIL_THROTTLE_LIMIT` (login por IP + e-mail normalizado, padrao 5).
+`LOGIN_EMAIL_THROTTLE_LIMIT` (login por IP + e-mail normalizado, padrao 5),
+`UPLOAD_THROTTLE_LIMIT` (uploads de comprovante por usuario autenticado na janela, padrao 10;
+sem token valido a chave e o IP).
+
+## Comprovantes
+
+`POST /receipts` (multipart/form-data): campo de arquivo `file` (PDF, PNG ou JPEG, ate 5 MiB) e
+campo de texto `paidAlone` (`true` ou `false`, nada mais). Responde 201 com
+`{receiptId, suggestedAmountCents}`; o valor e so uma sugestao (inteiro ou `null`). O arquivo e
+guardado em `UPLOAD_DIR` (diretorio privado, 0700) com nome gerado; o nome enviado pelo cliente
+nunca e usado. `GET /receipts/:id/file` so entrega ao dono (qualquer outro caso, admin incluso, e
+um 404 identico), com `Content-Type` vindo do banco, `nosniff`, `attachment` e `no-store`.
 
 ## Primeiro admin
 
