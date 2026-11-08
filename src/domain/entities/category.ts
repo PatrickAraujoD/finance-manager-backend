@@ -1,4 +1,7 @@
+import { ValidationError } from '../errors';
 import { requireNonBlank } from '../validation';
+
+export const MAX_CATEGORY_NAME = 60;
 
 export interface CategoryProps {
   id: string;
@@ -14,6 +17,9 @@ export class Category {
     requireNonBlank(input.name, 'Category name');
     if (input.ownerId !== null) requireNonBlank(input.ownerId, 'ownerId');
     const name = input.name.trim();
+    if (name.length > MAX_CATEGORY_NAME) {
+      throw new ValidationError(`Category name must have at most ${MAX_CATEGORY_NAME} characters`);
+    }
     return new Category({ ...input, name });
   }
 
@@ -25,6 +31,11 @@ export class Category {
   }
   get ownerId(): string | null {
     return this.props.ownerId;
+  }
+
+  /** Unicode-normalized, lowercase name: two names with the same key are duplicates in a scope. */
+  get nameKey(): string {
+    return this.props.name.normalize('NFC').toLowerCase();
   }
 
   isGlobal(): boolean {
