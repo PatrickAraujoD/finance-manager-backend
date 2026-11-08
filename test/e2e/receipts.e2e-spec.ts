@@ -479,14 +479,14 @@ describe('receipts with swapped providers', () => {
 
 describe('receipts upload rate limit', () => {
   let t: TestApp;
+  let dir: string;
   beforeAll(async () => {
-    t = await startApp({
-      uploadDir: await mkdtemp(join(tmpdir(), 'fm-e2e-uploads-')),
-      uploadThrottleLimit: 10,
-    });
+    dir = await mkdtemp(join(tmpdir(), 'fm-e2e-uploads-'));
+    t = await startApp({ uploadDir: dir, uploadThrottleLimit: 10 });
   });
   afterAll(async () => {
     await t.close();
+    await rm(dir, { recursive: true, force: true });
   });
 
   it('answers 429 to the 11th upload of a user, but not to another user', async () => {
