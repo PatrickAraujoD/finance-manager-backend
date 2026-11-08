@@ -1,6 +1,7 @@
 import { Receipt as ReceiptRow } from '@prisma/client';
 import { ReceiptRepository } from '../../application/ports/receipt-repository';
 import { Receipt } from '../../domain/entities/receipt';
+import { ConflictError } from '../../domain/errors';
 import { Money } from '../../domain/money';
 import { PrismaService } from './prisma.service';
 
@@ -25,9 +26,19 @@ function toDomain(row: ReceiptRow): Receipt {
 export class PrismaReceiptRepository implements ReceiptRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Inserts the receipt, or updates it when the id exists. An existing receipt keeps its owner:
+   * saving the id as another user is a ConflictError, never a transfer of ownership.
+   */
   async save(receipt: Receipt): Promise<void> {
+    const existing = await this.prisma.client.receipt.findUnique({
+      where: { id: receipt.id },
+      select: { userId: true },
+    });
+    if (existing && existing.userId !== receipt.userId) {
+      throw new ConflictError('Receipt belongs to another user');
+    }
     const data = {
-      userId: receipt.userId,
       storageKey: receipt.storageKey,
       mimeType: receipt.mimeType,
       sizeBytes: receipt.sizeBytes,
@@ -36,7 +47,7 @@ export class PrismaReceiptRepository implements ReceiptRepository {
     };
     await this.prisma.client.receipt.upsert({
       where: { id: receipt.id },
-      create: { id: receipt.id, ...data },
+      create: { id: receipt.id, userId: receipt.userId, ...data },
       update: data,
     });
   }
