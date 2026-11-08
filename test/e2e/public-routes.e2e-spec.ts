@@ -72,6 +72,8 @@ describe('public route inventory', () => {
         'POST /categories',
         'PATCH /categories/:id',
         'DELETE /categories/:id',
+        'PUT /income/:month',
+        'GET /income/:month',
       ]),
     );
   });
