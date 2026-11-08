@@ -1,15 +1,14 @@
 import 'reflect-metadata';
-import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { AppModule } from '../../src/presentation/http/modules/app.module';
+import { createApp } from '../../src/presentation/http/app';
+import { testConfig } from './support/test-app';
 
 describe('GET /health', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
+    app = await createApp(testConfig());
     await app.init();
   });
 

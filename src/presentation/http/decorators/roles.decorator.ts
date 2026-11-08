@@ -1,0 +1,8 @@
+import { SetMetadata } from '@nestjs/common';
+import { Role } from '../../../domain/role';
+
+export const ROLES_KEY = 'roles';
+
+/** Restricts a route to the given roles; enforced by RolesGuard (after JwtAuthGuard). */
+export const Roles = (...roles: Role[]): MethodDecorator & ClassDecorator =>
+  SetMetadata(ROLES_KEY, roles);
