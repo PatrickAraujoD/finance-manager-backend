@@ -13,7 +13,7 @@ export const MAX_INCOME_CENTS = 100_000_000_000;
 
 /** Throws `ValidationError` unless `month` is a strict `YYYY-MM` (month 01 to 12). */
 export function requireMonth(month: string): void {
-  if (!MONTH_PATTERN.test(month)) throw new ValidationError('Month must be in YYYY-MM format');
+  if (typeof month !== 'string' || !MONTH_PATTERN.test(month)) throw new ValidationError('Month must be in YYYY-MM format');
 }
 
 export interface MonthlyIncomeProps {
