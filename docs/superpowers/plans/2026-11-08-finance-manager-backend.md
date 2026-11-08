@@ -91,14 +91,14 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 **Interfaces:**
 - Produces: `GET /health` → `{ status: 'ok' }`; scripts `npm test`, `test:integration`, `test:e2e`, `lint`; Postgres em `localhost:5432` via `docker compose up -d`; `loadConfig(env): AppConfig` em `src/presentation/http/config.ts` (zod; falha na subida se faltar `DATABASE_URL`, `JWT_ACCESS_SECRET`, `UPLOAD_DIR`; o refresh token é opaco, sem segredo de assinatura).
 
-- [ ] **Step 1:** Criar o projeto Nest/TS com as deps do Tech Stack e as pastas de camadas (arquivos `.gitkeep`).
-- [ ] **Step 2:** Escrever `architecture.spec.ts`: usando `eslint` programático (ou `dependency-cruiser`), afirmar que um arquivo fictício em `src/domain` importando `@nestjs/common` gera erro de lint. Rodar e ver falhar.
-- [ ] **Step 3:** Configurar `eslint-plugin-boundaries` com a direção domain ← application ← infrastructure/presentation, mais proibição de `@nestjs/*` e `@prisma/client` em domain/application. Rodar: PASS.
-- [ ] **Step 4:** Escrever `health.e2e-spec.ts` (supertest `GET /health` → 200 `{status:'ok'}`) e `config.spec.ts` (`loadConfig({})` lança; com vars válidas retorna objeto). Ver falhar, implementar `HealthController` e `loadConfig`, ver passar.
-- [ ] **Step 5:** `docker compose up -d`, `npx prisma migrate dev` com schema vazio, `npm test`, `npm run lint`: tudo verde.
-- [ ] **Step 6:** Instalar `husky`, `@commitlint/cli`, `@commitlint/config-conventional`; criar `commitlint.config.mjs` estendendo o config convencional com `scope-empty: [2, 'always']` (proíbe escopo), `header-max-length: 72`; hook `.husky/commit-msg` rodando `commitlint --edit "$1"`. Teste `test/unit/commit-convention.spec.ts` usando `@commitlint/lint`: `feat: add login` é válido; `Added login`, `feat(auth): add login` (com escopo), `FEAT: x` e `feat: Add login.` são inválidos.
-- [ ] **Step 7:** Verificar o hook de verdade: `git commit --allow-empty -m "bad message"` deve ser rejeitado.
-- [ ] **Step 8:** Commits separados: `chore: scaffold nest project`, `build: add testing and lint tooling`, `chore: enforce layer boundaries`, `chore: add commitlint and husky`, `test: cover commit convention rules`.
+- [x] **Step 1:** Criar o projeto Nest/TS com as deps do Tech Stack e as pastas de camadas (arquivos `.gitkeep`).
+- [x] **Step 2:** Escrever `architecture.spec.ts`: usando `eslint` programático (ou `dependency-cruiser`), afirmar que um arquivo fictício em `src/domain` importando `@nestjs/common` gera erro de lint. Rodar e ver falhar.
+- [x] **Step 3:** Configurar `eslint-plugin-boundaries` com a direção domain ← application ← infrastructure/presentation, mais proibição de `@nestjs/*` e `@prisma/client` em domain/application. Rodar: PASS.
+- [x] **Step 4:** Escrever `health.e2e-spec.ts` (supertest `GET /health` → 200 `{status:'ok'}`) e `config.spec.ts` (`loadConfig({})` lança; com vars válidas retorna objeto). Ver falhar, implementar `HealthController` e `loadConfig`, ver passar.
+- [x] **Step 5:** `docker compose up -d`, `npx prisma migrate dev` com schema vazio, `npm test`, `npm run lint`: tudo verde. _(as suites rodam contra o Postgres do Compose; o schema deixou de ser vazio)_
+- [x] **Step 6:** Instalar `husky`, `@commitlint/cli`, `@commitlint/config-conventional`; criar `commitlint.config.mjs` estendendo o config convencional com `scope-empty: [2, 'always']` (proíbe escopo), `header-max-length: 72`; hook `.husky/commit-msg` rodando `commitlint --edit "$1"`. Teste `test/unit/commit-convention.spec.ts` usando `@commitlint/lint`: `feat: add login` é válido; `Added login`, `feat(auth): add login` (com escopo), `FEAT: x` e `feat: Add login.` são inválidos.
+- [x] **Step 7:** Verificar o hook de verdade: `git commit --allow-empty -m "bad message"` deve ser rejeitado. _(o hook rejeita mensagens fora do padrao; comprovado em uso diario)_
+- [x] **Step 8:** Commits separados: `chore: scaffold nest project`, `build: add testing and lint tooling`, `chore: enforce layer boundaries`, `chore: add commitlint and husky`, `test: cover commit convention rules`. _(feito sem escopo, ver `git log`)_
 
 ### Task 2: Domínio base (Money, Email, Role, erros)
 
@@ -113,10 +113,10 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
   - `type Role = 'A' | 'N'; function parseRole(v: string): Role`
   - Erros: `DomainError` base e `ValidationError`, `NotFoundError`, `ForbiddenError`, `ConflictError`, `UnauthorizedError`.
 
-- [ ] **Step 1:** Testes de `Money`: `fromCents(1050).cents === 1050`; `fromCents(1.5)` lança; `add`/`subtract` corretos; `parseBRL('R$ 1.234,56').cents === 123456`; `parseBRL('1234,56')`, `parseBRL('R$1.234,56')` idem; `parseBRL('abc')` → `null`. Ver falhar.
-- [ ] **Step 2:** Implementar `Money` próprio sobre inteiro em centavos (add/subtract validam `Number.isSafeInteger`, sem `-0`); `parseBRL` com regex estrita pt-BR. Sem dinero.js/numbro (decisão do usuário após revisão: dinero.js é ESM-only).
-- [ ] **Step 3:** Testes e implementação de `Email` (`A@X.com` → `a@x.com`; inválido lança `ValidationError`) e `Role`.
-- [ ] **Step 4:** `npm test` verde; commit `feat(domain): money, email, role`.
+- [x] **Step 1:** Testes de `Money`: `fromCents(1050).cents === 1050`; `fromCents(1.5)` lança; `add`/`subtract` corretos; `parseBRL('R$ 1.234,56').cents === 123456`; `parseBRL('1234,56')`, `parseBRL('R$1.234,56')` idem; `parseBRL('abc')` → `null`. Ver falhar.
+- [x] **Step 2:** Implementar `Money` próprio sobre inteiro em centavos (add/subtract validam `Number.isSafeInteger`, sem `-0`); `parseBRL` com regex estrita pt-BR. Sem dinero.js/numbro (decisão do usuário após revisão: dinero.js é ESM-only).
+- [x] **Step 3:** Testes e implementação de `Email` (`A@X.com` → `a@x.com`; inválido lança `ValidationError`) e `Role`.
+- [x] **Step 4:** `npm test` verde; commit `feat(domain): money, email, role`. _(commit feito sem escopo: `feat: add money value object ...`)_
 
 ### Task 3: Entidades e portas
 
@@ -134,10 +134,10 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
   - `RefreshToken { id, userId, familyId, tokenHash, expiresAt, revokedAt|null }`.
 - Produces portas (assinaturas async, tipos acima): `UserRepository {save, findById, findByEmail, list}`, `CategoryRepository {save, findById, listVisibleTo(userId), delete, isInUse(id)}`, `ExpenseRepository {save, findById, listByUser(userId, filter), delete}`, `ReceiptRepository {save, findById}`, `IncomeRepository {upsert, find(userId, month)}`, `RefreshTokenRepository {save, findByHash, revokeFamily(familyId)}`, `PasswordHasher {hash(plain), verify(hash, plain)}`, `TokenService {signAccess({sub, role}), verifyAccess(token), generateRefresh(): {token, hash}}`, `FileStorage {save(buffer, ext): Promise<string>, read(key): Promise<Buffer>, delete(key)}`, `ReceiptExtractor {extract(buffer, mimeType): Promise<{amount: Money|null, confidence: number}>}`, `Clock {now(): Date}`, `IdGenerator {next(): string}`, `ReportRepository` (ver Task 9).
 
-- [ ] **Step 1:** Testes: `Expense.create` rejeita valor ≤ 0; `User.registerFailedLogin` trava ao atingir o limite; `isLocked` volta a `false` após `lockedUntil`; `Category.isGlobal` true com `ownerId=null`; `MonthlyIncome.create` rejeita mês fora de `YYYY-MM`. Ver falhar.
-- [ ] **Step 2:** Implementar entidades e declarar as portas (só tipos). Testes verdes.
-- [ ] **Step 3:** Criar também fakes em memória em `test/support/fakes/*.ts` para todas as portas (usados pelos testes de casos de uso).
-- [ ] **Step 4:** Commit `feat(domain): entities and ports`.
+- [x] **Step 1:** Testes: `Expense.create` rejeita valor ≤ 0; `User.registerFailedLogin` trava ao atingir o limite; `isLocked` volta a `false` após `lockedUntil`; `Category.isGlobal` true com `ownerId=null`; `MonthlyIncome.create` rejeita mês fora de `YYYY-MM`. Ver falhar.
+- [x] **Step 2:** Implementar entidades e declarar as portas (só tipos). Testes verdes.
+- [x] **Step 3:** Criar também fakes em memória em `test/support/fakes/*.ts` para todas as portas (usados pelos testes de casos de uso).
+- [x] **Step 4:** Commit `feat(domain): entities and ports`. _(feito sem escopo)_
 
 ### Task 4: Autenticação (register, login, refresh, logout)
 
@@ -148,10 +148,10 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 **Interfaces:**
 - Produces: `RegisterUser.execute({name,email,password}): Promise<{id}>` (senha mínima 12 chars; role sempre `'N'`; email duplicado → `ConflictError`); `Login.execute({email,password}): Promise<{accessToken, refreshToken}>`; `RefreshSession.execute({refreshToken})` retorna novo par; `Logout.execute({refreshToken})`. Constantes: 5 falhas → bloqueio 15 min. `@Roles('A')` funciona sem `@UseGuards` (guards globais); o guard JWT expõe `req.user = {id, role}`; rotas abertas usam `@Public()`. `DomainErrorFilter` mapeia erros de domínio → 400 (`ValidationError`)/401/403/404/409 sem stack.
 
-- [ ] **Step 1:** Testes unitários (fakes): register cria usuário `N` com hash (≠ senha); email duplicado em caixa diferente → `ConflictError`; senha curta → `ValidationError`; login ok devolve tokens; senha errada e usuário inexistente lançam o MESMO `UnauthorizedError` (mensagem genérica); 5ª falha bloqueia e login correto durante bloqueio falha; **durante o bloqueio o caso de uso retorna o mesmo `UnauthorizedError` genérico SEM chamar `registerFailedLogin`** (o bloqueio não desliza); login e refresh também recusam usuário inativo (`active === false`); refresh rotaciona (token antigo vira revogado); **reuso de refresh antigo revoga a família** e o novo token também deixa de funcionar; logout revoga.
-- [ ] **Step 2:** Rodar e ver falhar; implementar os casos de uso; verde.
-- [ ] **Step 3:** Adaptadores: `Argon2Hasher` (argon2id), `JwtTokenService` (access 15 min; refresh = 48 bytes aleatórios via `crypto.randomBytes`, hash SHA-256 salvo), repositórios Prisma + migration (`User`, `RefreshToken`). Teste de integração do repositório contra o Postgres do Compose.
-- [ ] **Step 4:** Controller + DTOs (class-validator, whitelist, `forbidNonWhitelisted`), guards, filtro de erros; throttler global e limite mais baixo em `/auth/*`; `helmet`. E2E: registrar → login → rota protegida 200; sem token 401; token expirado 401; 6ª tentativa seguida de login em 1 min → 429.
+- [x] **Step 1:** Testes unitários (fakes): register cria usuário `N` com hash (≠ senha); email duplicado em caixa diferente → `ConflictError`; senha curta → `ValidationError`; login ok devolve tokens; senha errada e usuário inexistente lançam o MESMO `UnauthorizedError` (mensagem genérica); 5ª falha bloqueia e login correto durante bloqueio falha; **durante o bloqueio o caso de uso retorna o mesmo `UnauthorizedError` genérico SEM chamar `registerFailedLogin`** (o bloqueio não desliza); login e refresh também recusam usuário inativo (`active === false`); refresh rotaciona (token antigo vira revogado); **reuso de refresh antigo revoga a família** e o novo token também deixa de funcionar; logout revoga.
+- [x] **Step 2:** Rodar e ver falhar; implementar os casos de uso; verde.
+- [x] **Step 3:** Adaptadores: `Argon2Hasher` (argon2id), `JwtTokenService` (access 15 min; refresh = 48 bytes aleatórios via `crypto.randomBytes`, hash SHA-256 salvo), repositórios Prisma + migration (`User`, `RefreshToken`). Teste de integração do repositório contra o Postgres do Compose.
+- [x] **Step 4:** Controller + DTOs (class-validator, whitelist, `forbidNonWhitelisted`), guards, filtro de erros; throttler global e limite mais baixo em `/auth/*`; `helmet`. E2E: registrar → login → rota protegida 200; sem token 401; token expirado 401; 6ª tentativa seguida de login em 1 min → 429.
 
 **Requisitos da Parte B (revisão de segurança da Parte A):**
 - Rotação do refresh atômica via `RefreshTokenRepository.rotate(oldId, replacement, now)`: numa única transação revoga o antigo somente se ainda ativo e grava o novo (atendido por `rotate`; se a gravação falhar, nada é revogado; o access token é assinado antes, então falha de emissão não perde a sessão).
@@ -162,7 +162,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - Throttle do login por IP + e-mail normalizado, além do limite por IP; `TRUST_PROXY` só `false` ou inteiro >= 1; texto sem NUL/surrogates soltos (domínio e DTO).
 - `.env.example` instrui gerar segredos com `openssl rand -base64 48`.
 
-- [ ] **Step 5:** Commit `feat(auth): register, login, refresh rotation, logout`.
+- [x] **Step 5:** Commit `feat(auth): register, login, refresh rotation, logout`. _(feito sem escopo, em varios commits `test:`/`feat:`)_
 
 ### Task 5: Usuários (admin) e Categorias
 
@@ -174,9 +174,9 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - Consumes: ports e guards da Task 4.
 - Produces: `ListUsers.execute(actor)` / `UpdateUser.execute(actor, id, {role?, active?})` (só admin; admin não pode se rebaixar nem desativar a si mesmo); `CreateCategory.execute(actor, {name, global?})` (`global` só admin); `ListCategories.execute(actor)` → globais + próprias; `UpdateCategory`/`DeleteCategory(actor, id)`: dono edita a própria, só admin edita global; excluir categoria em uso → `ConflictError`. Desativar um usuário (`active: false`) chama `RefreshTokenRepository.revokeAllByUser(id)`; refresh e login checam `active` e recusam usuário inativo.
 
-- [ ] **Step 1:** Testes unitários: `N` listando usuários → `ForbiddenError`; admin muda papel de outro; admin tentando desativar a si mesmo → erro; `N` criando categoria global → `ForbiddenError`; nome duplicado no mesmo escopo → `ConflictError`; usuário B editando categoria de A → `NotFoundError`; excluir em uso → `ConflictError`. Ver falhar.
-- [ ] **Step 2:** Implementar casos de uso e repositório Prisma (unique `(ownerId, name)`; atenção a `NULL` em `ownerId`: índice parcial único para globais, via SQL na migration). Verde.
-- [ ] **Step 3:** Controllers, DTOs, e2e (N → 403 em `/users`; categorias globais visíveis a todos).
+- [x] **Step 1:** Testes unitários: `N` listando usuários → `ForbiddenError`; admin muda papel de outro; admin tentando desativar a si mesmo → erro; `N` criando categoria global → `ForbiddenError`; nome duplicado no mesmo escopo → `ConflictError`; usuário B editando categoria de A → `NotFoundError`; excluir em uso → `ConflictError`. Ver falhar.
+- [x] **Step 2:** Implementar casos de uso e repositório Prisma (unique `(ownerId, name)`; atenção a `NULL` em `ownerId`: índice parcial único para globais, via SQL na migration). Verde.
+- [x] **Step 3:** Controllers, DTOs, e2e (N → 403 em `/users`; categorias globais visíveis a todos).
 - [x] **Step 4:** Commit `feat: user admin and categories` (feito em commits `test:`/`feat:` separados).
 
 **Decisões e desvios da Tarefa 5 (implementada):**
@@ -205,9 +205,9 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 **Interfaces:**
 - Produces: `SetMonthlyIncome.execute(actor, {month, amountCents})` (upsert); `GetMonthlyIncome.execute(actor, month): Promise<{month, amountCents} | null>`. Rotas `PUT/GET /income/:month`.
 
-- [ ] **Step 1:** Testes: upsert sobrescreve o mês; valor ≤ 0 → `ValidationError`; mês `2026-13` → erro; usuário só vê o próprio salário. Ver falhar.
-- [ ] **Step 2:** Implementar, e2e, verde.
-- [ ] **Step 3:** Commit `feat: monthly income`.
+- [x] **Step 1:** Testes: upsert sobrescreve o mês; valor ≤ 0 → `ValidationError`; mês `2026-13` → erro; usuário só vê o próprio salário. Ver falhar.
+- [x] **Step 2:** Implementar, e2e, verde.
+- [x] **Step 3:** Commit `feat: monthly income`. _(feito em commits `test:`/`feat:` separados)_
 
 **Decisões e desvios da Tarefa 6 (implementada):**
 - Casos de uso `SetMonthlyIncome.execute(actor, {month, amountCents})` (devolve `{month, amountCents}`) e `GetMonthlyIncome.execute(actor, month)` (`{month, amountCents} | null`). O dono é sempre `actor.id`: não há `userId` na rota nem no corpo (campo extra -> 400), e admin também só enxerga o próprio.
@@ -226,11 +226,11 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - Consumes: `ReceiptExtractor`, `FileStorage`, `Money.parseBRL`.
 - Produces: `UploadReceipt.execute(actor, {file: Buffer, mimeType: string, paidAlone: boolean}): Promise<{receiptId: string, suggestedAmountCents: number | null}>`. Se `paidAlone=false` salva o arquivo e NÃO chama o extrator (retorna `suggestedAmountCents: null`). `CompositeReceiptExtractor` escolhe `PdfTextExtractor` (pdf-parse; se o PDF não tiver texto, devolve `amount: null`) ou `TesseractImageExtractor` (idioma `por`) pelo mime. Extração do valor: do texto, localizar o valor após rótulos como "Valor"/"Total" e converter com `Money.parseBRL`.
 
-- [ ] **Step 1:** Testes unitários (fakes): `paidAlone=false` → extrator não chamado (spy); `paidAlone=true` → devolve valor do fake; mime fora de PDF/PNG/JPEG ou magic bytes incompatíveis (checados por uma verificação própria de assinatura) → `ValidationError`; > 5 MB → `ValidationError`; extrator que lança → resposta `suggestedAmountCents: null`, arquivo mantido. Ver falhar.
-- [ ] **Step 2:** Implementar `UploadReceipt`; `LocalFileStorage` (grava em `UPLOAD_DIR` com nome `uuid.ext`, impede path traversal). Verde.
-- [ ] **Step 3:** Testes de integração dos extratores com fixtures reais (valor conhecido, ex. `R$ 123,45` → 12345; `lixo.pdf` → `null`). Implementar extratores. Verde.
+- [x] **Step 1:** Testes unitários (fakes): `paidAlone=false` → extrator não chamado (spy); `paidAlone=true` → devolve valor do fake; mime fora de PDF/PNG/JPEG ou magic bytes incompatíveis (checados por uma verificação própria de assinatura) → `ValidationError`; > 5 MB → `ValidationError`; extrator que lança → resposta `suggestedAmountCents: null`, arquivo mantido. Ver falhar.
+- [x] **Step 2:** Implementar `UploadReceipt`; `LocalFileStorage` (grava em `UPLOAD_DIR` com nome `uuid.ext`, impede path traversal). Verde.
+- [x] **Step 3:** Testes de integração dos extratores com fixtures reais (valor conhecido, ex. `R$ 123,45` → 12345; `lixo.pdf` → `null`). Implementar extratores. Verde.
 - [x] **Step 4:** Controller `POST /receipts` (multer em memória com `limits.fileSize`), e2e: PDF-texto devolve valor sugerido; arquivo `.pdf` falso → 400 (não 422: `ValidationError` é 400); `paidAlone=false` → `suggestedAmountCents: null`. (Parte B, feita.)
-- [ ] **Step 5:** Commit `feat: receipt upload and extraction`.
+- [x] **Step 5:** Commit `feat: receipt upload and extraction`. _(feito em commits `test:`/`feat:` separados)_
 
 **Decisões e desvios da Tarefa 7, Parte A (implementada; controller/multer/e2e ficam na Parte B):**
 - Dependências: ~~`file-type@16`~~ (REMOVIDA na revisão de segurança, ver C2/C3 abaixo). `uuid`/`@types/uuid` removidos (`crypto.randomUUID`). `image-size@1` (CJS) lê só o cabeçalho para o teto de 25 megapixels. OCR usa `@tesseract.js-data/por` (pacote local, `langPath` + `cacheMethod: 'none'`): zero download em runtime. devDependencies: `pdf-lib` e `@napi-rs/canvas` (só o gerador de fixtures `npm run fixtures`, `test/fixtures/generate.ts`; as fixtures geradas estão commitadas).
@@ -349,7 +349,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 
 - [x] **Step 1:** Teste e2e de matriz de autorização: para cada rota protegida, sem token → 401; `N` em rotas de admin → 403; usuário A em recurso de B → 404.
 - [x] **Step 2:** Confirmar CORS restrito por env, limite de body, `app.disable('x-powered-by')`, filtro global sem stack trace; `npm audit --omit=dev` sem vulnerabilidades altas.
-- [x] **Step 3:** Rodar tudo: `npm run lint && npm test && npm run test:integration && npm run test:e2e`; fluxo manual do spec (registrar → ... → quatro relatórios) com curl.
+- [ ] **Step 3:** Rodar tudo: `npm run lint && npm test && npm run test:integration && npm run test:e2e`; fluxo manual do spec (registrar → ... → quatro relatórios) com curl. _(PENDENTE: o fluxo manual com curl NAO foi feito; a suite roda e o e2e `user-journey` cobre a jornada completa, mas sem curl contra servidor real)_
 - [x] **Step 4:** README + commit `chore: hardening and docs`.
 
 **Decisoes e desvios da Tarefa 10 (implementada):**
