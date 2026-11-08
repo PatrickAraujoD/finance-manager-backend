@@ -63,6 +63,16 @@ describe('public route inventory', () => {
 
   it('finds the private routes too (guards the inventory itself)', () => {
     const all = listRoutes(t).map((r) => r.route);
-    expect(all).toContain('GET /auth/me');
+    expect(all).toEqual(
+      expect.arrayContaining([
+        'GET /auth/me',
+        'GET /users',
+        'PATCH /users/:id',
+        'GET /categories',
+        'POST /categories',
+        'PATCH /categories/:id',
+        'DELETE /categories/:id',
+      ]),
+    );
   });
 });
