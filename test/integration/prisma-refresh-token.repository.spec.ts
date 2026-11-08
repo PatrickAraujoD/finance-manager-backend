@@ -74,6 +74,53 @@ describe('PrismaRefreshTokenRepository (Postgres)', () => {
     expect(results.filter(Boolean)).toHaveLength(1);
   });
 
+  describe('rotate', () => {
+    it('revokes the old token and stores the replacement', async () => {
+      await repo.save(token('t1', 'u1', 'f1'));
+      expect(await repo.rotate('t1', token('t2', 'u1', 'f1'), NOW)).toBe(true);
+      expect((await repo.findByHash('hash-t1'))?.revokedAt?.getTime()).toBe(NOW.getTime());
+      expect(await repo.findByHash('hash-t2')).toMatchObject({ id: 't2', familyId: 'f1' });
+      expect((await repo.findByHash('hash-t2'))?.revokedAt).toBeNull();
+    });
+
+    it('returns false and does not store the replacement when the old token is revoked', async () => {
+      const earlier = new Date('2026-11-01T00:00:00Z');
+      await repo.save(token('t1', 'u1', 'f1', earlier));
+      expect(await repo.rotate('t1', token('t2', 'u1', 'f1'), NOW)).toBe(false);
+      expect(await repo.findByHash('hash-t2')).toBeNull();
+      expect((await repo.findByHash('hash-t1'))?.revokedAt?.getTime()).toBe(earlier.getTime());
+    });
+
+    it('returns false for an unknown old id', async () => {
+      expect(await repo.rotate('nope', token('t2', 'u1', 'f1'), NOW)).toBe(false);
+      expect(await repo.findByHash('hash-t2')).toBeNull();
+    });
+
+    it('of 5 concurrent rotations of the same token exactly one wins and one replacement exists', async () => {
+      await repo.save(token('t1', 'u1', 'f1'));
+      const results = await Promise.all(
+        Array.from({ length: 5 }, (_, i) => repo.rotate('t1', token(`n${i}`, 'u1', 'f1'), NOW)),
+      );
+      expect(results.filter(Boolean)).toHaveLength(1);
+      expect(await prisma.client.refreshToken.count({ where: { id: { startsWith: 'n' } } })).toBe(1);
+    });
+
+    it('keeps the old token active when storing the replacement fails', async () => {
+      await repo.save(token('t1', 'u1', 'f1'));
+      await repo.save(token('t2', 'u1', 'f1'));
+      const clash = RefreshToken.create({
+        id: 't3',
+        userId: 'u1',
+        familyId: 'f1',
+        tokenHash: 'hash-t2',
+        expiresAt: LATER,
+      });
+      await expect(repo.rotate('t1', clash, NOW)).rejects.toThrow();
+      expect((await repo.findByHash('hash-t1'))?.revokedAt).toBeNull();
+      expect(await prisma.client.refreshToken.count({ where: { id: 't3' } })).toBe(0);
+    });
+  });
+
   it('revokeFamily revokes only that family and keeps earlier revocation dates', async () => {
     const earlier = new Date('2026-11-01T00:00:00Z');
     await repo.save(token('t1', 'u1', 'f1'));

@@ -45,7 +45,8 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
     return count === 1;
   }
 
-  async rotate(): Promise<boolean> {
+  async rotate(oldId: string, replacement: RefreshToken, now: Date): Promise<boolean> {
+    void [oldId, replacement, now];
     throw new Error('Not implemented');
   }
 
