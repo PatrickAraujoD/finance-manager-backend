@@ -1,0 +1,77 @@
+{
+  "name": "finance-manager-backend",
+  "version": "0.1.0",
+  "description": "API REST de gestão financeira pessoal",
+  "main": "dist/main.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node src/main.ts",
+    "lint": "eslint .",
+    "test": "jest --config jest.config.ts test/unit",
+    "test:integration": "jest --config jest.config.ts test/integration --passWithNoTests",
+    "test:e2e": "jest --config jest.config.ts test/e2e"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PatrickAraujoD/finance-manager-backend.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/PatrickAraujoD/finance-manager-backend/issues"
+  },
+  "homepage": "https://github.com/PatrickAraujoD/finance-manager-backend#readme",
+  "dependencies": {
+    "@nestjs/common": "^12.4.0",
+    "@nestjs/config": "^12.1.1",
+    "@nestjs/core": "^12.4.0",
+    "@nestjs/jwt": "^12.0.4",
+    "@nestjs/passport": "^12.0.1",
+    "@nestjs/platform-express": "^12.4.0",
+    "@nestjs/throttler": "^6.7.1",
+    "@prisma/client": "^7.10.1",
+    "argon2": "^0.45.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "date-fns": "^4.4.0",
+    "dinero.js": "^2.0.2",
+    "file-type": "^22.3.0",
+    "helmet": "^8.3.0",
+    "multer": "^2.5.0",
+    "numbro": "^2.5.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pdf-parse": "^2.4.5",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "tesseract.js": "^7.0.0",
+    "uuid": "^14.0.3",
+    "validator": "^13.15.35",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@nestjs/testing": "^12.4.0",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.6",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^7.2.1",
+    "@types/uuid": "^10.0.0",
+    "@types/validator": "^13.15.10",
+    "eslint": "^10.14.0",
+    "eslint-plugin-boundaries": "^7.4.2",
+    "jest": "^30.5.2",
+    "prisma": "^8.0.0-rc.33",
+    "supertest": "^7.3.2",
+    "ts-jest": "^29.4.15",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.1"
+  },
+  "private": true
+}
