@@ -24,15 +24,16 @@ export class LoginDto {
   @MaxLength(254)
   email!: string;
 
+  // No CleanText: accounts created before the registration rule must still be able to log in.
+  // The password only reaches the hasher, never a text column.
   @IsString()
-  @CleanText()
   @Length(1, 128)
   password!: string;
 }
 
 export class RefreshTokenDto {
+  // Opaque: only its hash is looked up, so any content is harmless; just bound its size.
   @IsString()
-  @CleanText()
   @Length(1, MAX_REFRESH_TOKEN_LENGTH)
   refreshToken!: string;
 }
