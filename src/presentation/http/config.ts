@@ -7,10 +7,11 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
   CORS_ORIGINS: z.string().default(''),
-  // 'false' (default), 'true' or the number of trusted proxy hops.
+  // 'false' (default) or the exact number of trusted proxy hops (integer >= 1).
+  // 'true' and free-form values are refused: they let clients spoof X-Forwarded-For.
   TRUST_PROXY: z
     .string()
-    .regex(/^(true|false|\d+)$/)
+    .regex(/^(false|[1-9]\d{0,2})$/)
     .default('false'),
   THROTTLE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
   THROTTLE_LIMIT: z.coerce.number().int().positive().default(100),
@@ -25,18 +26,16 @@ export interface AppConfig {
   port: number;
   /** Allowed CORS origins; empty means CORS is disabled. */
   corsOrigins: string[];
-  /** Express `trust proxy`: false, true or number of hops. */
-  trustProxy: boolean | number;
+  /** Express `trust proxy`: false or the exact number of trusted hops (>= 1). */
+  trustProxy: false | number;
   throttleTtlSeconds: number;
   throttleLimit: number;
   /** Stricter per-IP limit for login, register and refresh. */
   authThrottleLimit: number;
 }
 
-function parseTrustProxy(raw: string): boolean | number {
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  return Number(raw);
+function parseTrustProxy(raw: string): false | number {
+  return raw === 'false' ? false : Number(raw);
 }
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
