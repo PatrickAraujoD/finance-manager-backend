@@ -88,6 +88,34 @@ describe('PrismaReceiptRepository (Postgres)', () => {
     expect(stored?.suggestedAmount?.cents).toBe(12345);
   });
 
+  it('lets exactly one of two concurrent saves of the same id win, and keeps its data', async () => {
+    await new PrismaUserRepository(prisma).save(
+      User.create({
+        id: 'u2',
+        name: 'u2',
+        email: Email.create('u2@x.com'),
+        passwordHash: 'h',
+        role: 'N',
+      }),
+    );
+    for (let round = 0; round < 15; round++) {
+      const id = `race-${round}`;
+      const results = await Promise.allSettled([
+        repo.save(receipt({ id, userId: 'u1', storageKey: `a${round}.pdf`, suggestedAmount: Money.fromCents(111) })),
+        repo.save(receipt({ id, userId: 'u2', storageKey: `b${round}.pdf`, suggestedAmount: Money.fromCents(222) })),
+      ]);
+      const winners = results.filter((r) => r.status === 'fulfilled');
+      const losers = results.filter((r) => r.status === 'rejected');
+      expect(winners).toHaveLength(1);
+      expect((losers[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictError);
+      const stored = await repo.findById(id);
+      const winnerIsFirst = results[0].status === 'fulfilled';
+      expect(stored?.userId).toBe(winnerIsFirst ? 'u1' : 'u2');
+      expect(stored?.suggestedAmount?.cents).toBe(winnerIsFirst ? 111 : 222);
+      expect(stored?.storageKey).toBe(winnerIsFirst ? `a${round}.pdf` : `b${round}.pdf`);
+    }
+  });
+
   it('rejects a duplicated storage key', async () => {
     await repo.save(receipt());
     await expect(repo.save(receipt({ id: 'r2' }))).rejects.toThrow();
