@@ -1,8 +1,29 @@
-import { existsSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import * as fsPromises from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NotFoundError, ValidationError } from '../../../src/domain/errors';
 import { LocalFileStorage } from '../../../src/infrastructure/storage/local-file-storage';
+
+// Real file system calls, except that a test can make writeFile/unlink fail once.
+jest.mock('node:fs/promises', () => {
+  const actual = jest.requireActual<typeof import('node:fs/promises')>('node:fs/promises');
+  return { ...actual, writeFile: jest.fn(actual.writeFile), unlink: jest.fn(actual.unlink) };
+});
+const writeFileMock = jest.mocked(fsPromises.writeFile);
+const unlinkMock = jest.mocked(fsPromises.unlink);
+const { writeFile: realWriteFile, unlink: realUnlink } =
+  jest.requireActual<typeof import('node:fs/promises')>('node:fs/promises');
 
 describe('LocalFileStorage', () => {
   let root: string;
@@ -27,6 +48,42 @@ describe('LocalFileStorage', () => {
       const key = await storage.save(Buffer.from('x'), 'png');
       expect(statSync(dir).mode & 0o777).toBe(0o700);
       expect(statSync(join(dir, key)).mode & 0o777).toBe(0o600);
+    });
+
+    it('tightens an existing, too open directory to 0700', async () => {
+      mkdirSync(dir, { mode: 0o755 });
+      chmodSync(dir, 0o755);
+      await storage.save(Buffer.from('x'), 'png');
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+    });
+
+    describe('when the disk fills up in the middle of a write', () => {
+      afterEach(() => {
+        writeFileMock.mockReset().mockImplementation(realWriteFile);
+        unlinkMock.mockReset().mockImplementation(realUnlink);
+      });
+
+      const noSpace = () => Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+
+      it('removes the partial file and rethrows the error', async () => {
+        writeFileMock.mockImplementationOnce(async (file, data, options) => {
+          // Half of the bytes reach the disk, then the disk is full.
+          await realWriteFile(file, (data as Buffer).subarray(0, 2), options);
+          throw noSpace();
+        });
+        await expect(storage.save(Buffer.from('hello'), 'pdf')).rejects.toMatchObject({
+          code: 'ENOSPC',
+        });
+        expect(readdirSync(dir)).toEqual([]);
+      });
+
+      it('still reports the write error when the cleanup also fails', async () => {
+        writeFileMock.mockRejectedValueOnce(noSpace());
+        unlinkMock.mockRejectedValueOnce(new Error('unlink failed'));
+        await expect(storage.save(Buffer.from('hello'), 'pdf')).rejects.toMatchObject({
+          code: 'ENOSPC',
+        });
+      });
     });
 
     it('never reuses a key', async () => {
