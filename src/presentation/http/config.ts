@@ -17,6 +17,10 @@ const envSchema = z.object({
   AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(20),
   LOGIN_EMAIL_THROTTLE_LIMIT: z.coerce.number().int().positive().default(5),
   UPLOAD_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
+  // Server timeouts in milliseconds, bounded so a typo cannot disable them (0 means "never").
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(60_000),
+  HEADERS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(20_000),
+  KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(5_000),
 });
 
 export interface AppConfig {
@@ -36,6 +40,12 @@ export interface AppConfig {
   loginEmailThrottleLimit: number;
   /** Receipt uploads per user (IP when anonymous) in the throttle window. */
   uploadThrottleLimit: number;
+  /** Max time to receive a whole request (headers and body); slow uploads beyond it are cut. */
+  requestTimeoutMs: number;
+  /** Max time to receive the request headers (slowloris defence). */
+  headersTimeoutMs: number;
+  /** How long an idle keep-alive connection stays open. */
+  keepAliveTimeoutMs: number;
 }
 
 function parseTrustProxy(raw: string): false | number {
@@ -49,6 +59,9 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     throw new Error(`Invalid environment configuration: ${keys.join(', ')}`);
   }
   const e = parsed.data;
+  if (e.HEADERS_TIMEOUT_MS > e.REQUEST_TIMEOUT_MS) {
+    throw new Error('Invalid environment configuration: HEADERS_TIMEOUT_MS');
+  }
   return {
     databaseUrl: e.DATABASE_URL,
     jwtAccessSecret: e.JWT_ACCESS_SECRET,
@@ -63,5 +76,8 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
     authThrottleLimit: e.AUTH_THROTTLE_LIMIT,
     loginEmailThrottleLimit: e.LOGIN_EMAIL_THROTTLE_LIMIT,
     uploadThrottleLimit: e.UPLOAD_THROTTLE_LIMIT,
+    requestTimeoutMs: e.REQUEST_TIMEOUT_MS,
+    headersTimeoutMs: e.HEADERS_TIMEOUT_MS,
+    keepAliveTimeoutMs: e.KEEP_ALIVE_TIMEOUT_MS,
   };
 }

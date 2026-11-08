@@ -23,6 +23,28 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   express.useGlobalFilters(new DomainErrorFilter());
+  applyServerTimeouts(app.getHttpServer() as HttpServerTimeouts, config);
+}
+
+interface HttpServerTimeouts {
+  requestTimeout: number;
+  headersTimeout: number;
+  keepAliveTimeout: number;
+  connectionsCheckingInterval: number;
+}
+
+/**
+ * Node only enforces the request/headers timeouts when it sweeps its connections (every 30 s by
+ * default), so the sweep interval follows the headers timeout to keep the limits meaningful.
+ */
+function applyServerTimeouts(server: HttpServerTimeouts, config: AppConfig): void {
+  server.requestTimeout = config.requestTimeoutMs;
+  server.headersTimeout = config.headersTimeoutMs;
+  server.keepAliveTimeout = config.keepAliveTimeoutMs;
+  server.connectionsCheckingInterval = Math.min(
+    5_000,
+    Math.max(100, Math.floor(config.headersTimeoutMs / 4)),
+  );
 }
 
 export async function createApp(config: AppConfig): Promise<INestApplication> {
