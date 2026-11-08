@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Mensagens "chore: ..." sem escopo (sem include: scope), como o commitlint exige.
+    commit-message:
+      prefix: "chore"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Prisma 7 muda o modelo de configuracao e o client; a migracao e uma tarefa propria
+      # (inclui o fix do audit aceito em deepmerge-ts). Majors ficam fora ate planejarmos.
+      - dependency-name: prisma
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      # NestJS major costuma exigir mudar guards, modulos e testes juntos; atualizar a mao.
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        update-types: [minor, patch]
