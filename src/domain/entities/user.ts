@@ -17,7 +17,11 @@ export type CreateUserInput = Pick<UserProps, 'id' | 'name' | 'email' | 'passwor
   Partial<Pick<UserProps, 'active' | 'failedLogins' | 'lockedUntil'>>;
 
 export class User {
-  private constructor(private readonly props: UserProps) {}
+  readonly #props: UserProps;
+
+  private constructor(props: UserProps) {
+    this.#props = props;
+  }
 
   static create(input: CreateUserInput): User {
     const name = input.name.trim();
@@ -40,49 +44,57 @@ export class User {
   }
 
   get id(): string {
-    return this.props.id;
+    return this.#props.id;
   }
   get name(): string {
-    return this.props.name;
+    return this.#props.name;
   }
   get email(): Email {
-    return this.props.email;
+    return this.#props.email;
   }
   get passwordHash(): string {
-    return this.props.passwordHash;
+    return this.#props.passwordHash;
   }
   get role(): Role {
-    return this.props.role;
+    return this.#props.role;
   }
   get active(): boolean {
-    return this.props.active;
+    return this.#props.active;
   }
   get failedLogins(): number {
-    return this.props.failedLogins;
+    return this.#props.failedLogins;
   }
   get lockedUntil(): Date | null {
-    return this.props.lockedUntil;
+    return this.#props.lockedUntil;
   }
 
   registerFailedLogin(now: Date, maxAttempts: number, lockMinutes: number): User {
     if (this.isLocked(now)) return this;
-    const { lockedUntil: previousLock } = this.props;
+    const { lockedUntil: previousLock } = this.#props;
     const lockExpired = previousLock !== null && now.getTime() >= previousLock.getTime();
-    const failedLogins = (lockExpired ? 0 : this.props.failedLogins) + 1;
+    const failedLogins = (lockExpired ? 0 : this.#props.failedLogins) + 1;
     const lockedUntil =
       failedLogins >= maxAttempts
         ? new Date(now.getTime() + lockMinutes * 60_000)
         : lockExpired
           ? null
           : previousLock;
-    return new User({ ...this.props, failedLogins, lockedUntil });
+    return new User({ ...this.#props, failedLogins, lockedUntil });
   }
 
   isLocked(now: Date): boolean {
-    return this.props.lockedUntil !== null && now.getTime() < this.props.lockedUntil.getTime();
+    return this.#props.lockedUntil !== null && now.getTime() < this.#props.lockedUntil.getTime();
+  }
+
+  withRole(role: Role): User {
+    return new User({ ...this.#props, role });
+  }
+
+  withActive(active: boolean): User {
+    return new User({ ...this.#props, active });
   }
 
   resetFailedLogins(): User {
-    return new User({ ...this.props, failedLogins: 0, lockedUntil: null });
+    return new User({ ...this.#props, failedLogins: 0, lockedUntil: null });
   }
 }
