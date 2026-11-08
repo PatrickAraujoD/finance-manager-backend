@@ -177,7 +177,18 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - [ ] **Step 1:** Testes unitários: `N` listando usuários → `ForbiddenError`; admin muda papel de outro; admin tentando desativar a si mesmo → erro; `N` criando categoria global → `ForbiddenError`; nome duplicado no mesmo escopo → `ConflictError`; usuário B editando categoria de A → `NotFoundError`; excluir em uso → `ConflictError`. Ver falhar.
 - [ ] **Step 2:** Implementar casos de uso e repositório Prisma (unique `(ownerId, name)`; atenção a `NULL` em `ownerId`: índice parcial único para globais, via SQL na migration). Verde.
 - [ ] **Step 3:** Controllers, DTOs, e2e (N → 403 em `/users`; categorias globais visíveis a todos).
-- [ ] **Step 4:** Commit `feat: user admin and categories`.
+- [x] **Step 4:** Commit `feat: user admin and categories` (feito em commits `test:`/`feat:` separados).
+
+**Decisões e desvios da Tarefa 5 (implementada):**
+- `Actor {id, role}` em `src/application/actor.ts`; o papel vem do banco (o `JwtAuthGuard` o relê a cada request), não do token.
+- `UpdateUser.execute(actor, id, {role?, active?})` devolve o `User`. Auto-rebaixamento/auto-desativação -> `ForbiddenError` (403). Corpo vazio -> `ValidationError`. Defesa extra (ator obsoleto): rebaixar/desativar o único admin ativo restante -> `ConflictError` (409). Limite conhecido: duas requisições simultâneas de admins se rebaixando mutuamente não são serializadas (o `mutate` trava só a linha alvo); exigiria uma porta nova com lock global e foi deixado de fora.
+- `active: false` chama `revokeAllByUser`; o access token já emitido deixa de valer na próxima requisição (o guard checa `active`).
+- Categorias: `Category.nameKey` (NFC + minúsculas, sobre o nome já com trim) e limite de 60 caracteres no domínio. Unicidade: `UNIQUE(ownerId, nameKey)` + índice parcial único `WHERE "ownerId" IS NULL` (SQL na migration `20261108180000_categories_expenses`), mais CHECK `amountCents > 0`. Contrato das portas: `CategoryRepository.save` lança `ConflictError` para nome duplicado no escopo e `delete` lança `ConflictError` se houver gastos (FK `ON DELETE RESTRICT`); o fake imita ambos. Conflito de nome é detectado pelo banco (sem `findByName`), logo sem corrida check-then-insert.
+- `UpdateCategory.execute(actor, id, {name})`; `CreateCategory` devolve `{id}`. Categoria alheia (inclusive para admin) -> `NotFoundError`; global editada por não-admin -> `ForbiddenError`.
+- `Expense` entra só como schema (`amountCents BIGINT`, `spentAt DATE`, FKs Restrict; `receiptId` é coluna simples até existir `Receipt`); o repositório continua na Tarefa 8.
+- `User.createdAt` (nulo até persistir) foi adicionado à entidade para a resposta de `GET /users`; respostas usam lista explícita de campos (`views.ts`), nunca `passwordHash`.
+- HTTP: `GET /users`, `PATCH /users/:id` (`@Roles('A')`, DTO com `ValidateIf` para rejeitar `null`), `GET/POST /categories`, `PATCH/DELETE /categories/:id` (204); ids com `ParseUUIDPipe` (400). Nenhuma nova rota pública (inventário continua com as 5).
+- Seed: `prisma/seed.ts` (`npm run seed`), caso de uso `EnsureAdmin` (regra de senha extraída para `auth/password-policy.ts` e compartilhada com `RegisterUser`); idempotente, nunca altera conta existente nem imprime a senha. Documentado no README/.env.example.
 
 ### Task 6: Renda mensal
 
