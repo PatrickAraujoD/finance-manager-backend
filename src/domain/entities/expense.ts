@@ -4,6 +4,12 @@ import { requireCleanText, requireNonBlank } from '../validation';
 
 const MAX_DESCRIPTION = 500;
 
+/**
+ * Largest accepted expense: R$ 10,000,000.00 (1,000,000,000 cents). A sanity ceiling against
+ * typos and abuse, far below Number.MAX_SAFE_INTEGER so report sums can never overflow.
+ */
+export const MAX_EXPENSE_CENTS = 1_000_000_000;
+
 export interface ExpenseProps {
   id: string;
   userId: string;
@@ -29,6 +35,9 @@ export class Expense {
     if (input.receiptId !== null) requireNonBlank(input.receiptId, 'receiptId');
     if (input.description !== undefined) requireCleanText(input.description, 'description');
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
+    if (input.amount.cents > MAX_EXPENSE_CENTS) {
+      throw new ValidationError(`Expense amount must be at most ${MAX_EXPENSE_CENTS} cents`);
+    }
     if (Number.isNaN(input.spentAt.getTime())) throw new ValidationError('Invalid spentAt date');
     if (input.description !== undefined && input.description.length > MAX_DESCRIPTION) {
       throw new ValidationError(`Description must have at most ${MAX_DESCRIPTION} characters`);
