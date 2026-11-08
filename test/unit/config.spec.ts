@@ -39,6 +39,7 @@ describe('loadConfig', () => {
       throttleLimit: 100,
       authThrottleLimit: 20,
       loginEmailThrottleLimit: 5,
+      uploadThrottleLimit: 10,
     });
   });
 
@@ -79,5 +80,14 @@ describe('loadConfig', () => {
       authThrottleLimit: 2,
       loginEmailThrottleLimit: 3,
     });
+  });
+
+  it('reads UPLOAD_THROTTLE_LIMIT and refuses a non positive one', () => {
+    expect(loadConfig({ ...valid, UPLOAD_THROTTLE_LIMIT: '3' }).uploadThrottleLimit).toBe(3);
+    for (const raw of ['0', '-1', 'abc']) {
+      expect(() => loadConfig({ ...valid, UPLOAD_THROTTLE_LIMIT: raw })).toThrow(
+        'UPLOAD_THROTTLE_LIMIT',
+      );
+    }
   });
 });
