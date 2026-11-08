@@ -1,22 +1,34 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
+import { Public } from '../../src/presentation/http/decorators/public.decorator';
 import { Roles } from '../../src/presentation/http/decorators/roles.decorator';
-import { JwtAuthGuard } from '../../src/presentation/http/guards/jwt-auth.guard';
-import { RolesGuard } from '../../src/presentation/http/guards/roles.guard';
 import { ACCESS_SECRET, cleanTables, startApp, TestApp } from './support/test-app';
 
 const PASSWORD = 'correct horse battery';
 
 @Controller('probe')
 class ProbeController {
+  // No @Public() and no explicit guard: the global guards must protect it.
+  @Get('secret')
+  secret(): { ok: true } {
+    return { ok: true };
+  }
+
+  // @Roles without @UseGuards: the global guards must enforce it.
   @Get('admin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('A')
   admin(): { ok: true } {
     return { ok: true };
   }
 
+  @Public()
+  @Get('open')
+  open(): { ok: true } {
+    return { ok: true };
+  }
+
+  @Public()
   @Get('boom')
   boom(): never {
     throw new Error('secret internal detail at /srv/app/db.ts');
@@ -115,6 +127,22 @@ describe('authentication and authorization guards', () => {
 
     it('answers 401 without a token', async () => {
       expect((await http().get('/probe/admin')).status).toBe(401);
+    });
+  });
+
+  describe('global guard is fail-closed', () => {
+    it('answers 401 to a route without @Public() and without explicit guards', async () => {
+      expect((await http().get('/probe/secret')).status).toBe(401);
+    });
+
+    it('lets an authenticated user reach a route without @Public()', async () => {
+      const { accessToken } = await signUp();
+      const res = await http().get('/probe/secret').set('Authorization', `Bearer ${accessToken}`);
+      expect(res.status).toBe(200);
+    });
+
+    it('serves a @Public() route without a token', async () => {
+      expect((await http().get('/probe/open')).status).toBe(200);
     });
   });
 
