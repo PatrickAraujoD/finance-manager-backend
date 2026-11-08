@@ -6,7 +6,7 @@
 
 **Architecture:** Arquitetura Limpa em quatro camadas (`domain` ← `application` ← `infrastructure` / `presentation`). Casos de uso são classes TypeScript puras que recebem portas (interfaces) pelo construtor; NestJS só faz a fiação e expõe HTTP. Dinheiro sempre em centavos inteiros.
 
-**Tech Stack:** TypeScript, NestJS (apenas `presentation`), PostgreSQL + Prisma (apenas `infrastructure`), Jest + supertest, argon2, `@nestjs/jwt` + `passport-jwt`, `@nestjs/throttler`, helmet, class-validator, zod, date-fns, uuid, multer + file-type, pdf-parse, tesseract.js, eslint-plugin-boundaries, Docker Compose, npm.
+**Tech Stack:** TypeScript, NestJS (apenas `presentation`), PostgreSQL + Prisma (apenas `infrastructure`), Jest + supertest, argon2, `jsonwebtoken`, `@nestjs/throttler`, helmet, class-validator, zod, date-fns, uuid, multer + file-type, pdf-parse, tesseract.js, eslint-plugin-boundaries, Docker Compose, npm.
 
 **Spec:** `docs/superpowers/specs/2026-11-08-finance-manager-backend-design.md`
 
@@ -19,6 +19,11 @@
 - Papéis: `'A'` (admin) e `'N'` (normal). Admin NÃO lê gastos/salário de outros usuários.
 - Autorização (dono do recurso / papel) é feita nos casos de uso, não só em guards.
 - Upload: máx. 5 MB; tipos PDF/PNG/JPEG validados por magic bytes; nome de arquivo aleatório.
+- Guard global fail-closed: `JwtAuthGuard` e depois `RolesGuard` são `APP_GUARD` (após o throttler); toda rota é privada a menos que marcada com `@Public()`. Públicas hoje, exatamente: `GET /health`, `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` (um teste e2e lista as rotas e trava esse conjunto). Não usar `@UseGuards` para autenticação.
+- `ValidationError` do domínio -> HTTP 400 (mesmo status da validação de DTO), nunca 422.
+- Texto sem NUL (`\u0000`) e sem surrogates soltos: rejeitado no domínio (`requireNonBlank`/`requireCleanText` em todo campo de texto das entidades e `Email`) e nos DTOs (`@CleanText()`), para nunca virar 500 do Postgres (`22021`).
+- `TRUST_PROXY` aceita só `false` (padrão) ou inteiro >= 1 (número exato de saltos); `true`, `0` e strings livres derrubam a subida (evita burlar o rate limit por `X-Forwarded-For`).
+- Throttle de `/auth/login` por IP + e-mail normalizado (trim+lowercase, truncado e hasheado: chave de tamanho fixo), além do limite por IP (`AUTH_THROTTLE_LIMIT`, padrão 20; `LOGIN_EMAIL_THROTTLE_LIMIT`, padrão 5).
 - Access token 15 min; refresh token rotativo, guardado só como hash; reuso de refresh revoga a família.
 - `Expense.spentAt` é uma DATA DE CALENDÁRIO guardada como `Date` às 00:00 UTC (decisão do CTO; evita deslocar compras de fuso). `Expense.create` normaliza para 00:00 UTC do mesmo dia UTC; agrupamentos por dia/mês e limites de filtro são feitos em UTC.
 - npm (pnpm ausente).
@@ -84,7 +89,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - Test: `test/e2e/health.e2e-spec.ts`, `test/unit/architecture.spec.ts`
 
 **Interfaces:**
-- Produces: `GET /health` → `{ status: 'ok' }`; scripts `npm test`, `test:integration`, `test:e2e`, `lint`; Postgres em `localhost:5432` via `docker compose up -d`; `loadConfig(env): AppConfig` em `src/presentation/http/config.ts` (zod; falha na subida se faltar `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `UPLOAD_DIR`).
+- Produces: `GET /health` → `{ status: 'ok' }`; scripts `npm test`, `test:integration`, `test:e2e`, `lint`; Postgres em `localhost:5432` via `docker compose up -d`; `loadConfig(env): AppConfig` em `src/presentation/http/config.ts` (zod; falha na subida se faltar `DATABASE_URL`, `JWT_ACCESS_SECRET`, `UPLOAD_DIR`; o refresh token é opaco, sem segredo de assinatura).
 
 - [ ] **Step 1:** Criar o projeto Nest/TS com as deps do Tech Stack e as pastas de camadas (arquivos `.gitkeep`).
 - [ ] **Step 2:** Escrever `architecture.spec.ts`: usando `eslint` programático (ou `dependency-cruiser`), afirmar que um arquivo fictício em `src/domain` importando `@nestjs/common` gera erro de lint. Rodar e ver falhar.
@@ -141,7 +146,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - Test: `test/unit/application/auth/*.spec.ts`, `test/integration/prisma-user.repository.spec.ts`, `test/e2e/auth.e2e-spec.ts`
 
 **Interfaces:**
-- Produces: `RegisterUser.execute({name,email,password}): Promise<{id}>` (senha mínima 12 chars; role sempre `'N'`; email duplicado → `ConflictError`); `Login.execute({email,password}): Promise<{accessToken, refreshToken}>`; `RefreshSession.execute({refreshToken})` retorna novo par; `Logout.execute({refreshToken})`. Constantes: 5 falhas → bloqueio 15 min. Decorator `@Roles('A')` + `JwtAuthGuard` expõem `req.user = {id, role}`. `DomainErrorFilter` mapeia erros de domínio → 400/401/403/404/409/422 sem stack.
+- Produces: `RegisterUser.execute({name,email,password}): Promise<{id}>` (senha mínima 12 chars; role sempre `'N'`; email duplicado → `ConflictError`); `Login.execute({email,password}): Promise<{accessToken, refreshToken}>`; `RefreshSession.execute({refreshToken})` retorna novo par; `Logout.execute({refreshToken})`. Constantes: 5 falhas → bloqueio 15 min. `@Roles('A')` funciona sem `@UseGuards` (guards globais); o guard JWT expõe `req.user = {id, role}`; rotas abertas usam `@Public()`. `DomainErrorFilter` mapeia erros de domínio → 400 (`ValidationError`)/401/403/404/409 sem stack.
 
 - [ ] **Step 1:** Testes unitários (fakes): register cria usuário `N` com hash (≠ senha); email duplicado em caixa diferente → `ConflictError`; senha curta → `ValidationError`; login ok devolve tokens; senha errada e usuário inexistente lançam o MESMO `UnauthorizedError` (mensagem genérica); 5ª falha bloqueia e login correto durante bloqueio falha; **durante o bloqueio o caso de uso retorna o mesmo `UnauthorizedError` genérico SEM chamar `registerFailedLogin`** (o bloqueio não desliza); login e refresh também recusam usuário inativo (`active === false`); refresh rotaciona (token antigo vira revogado); **reuso de refresh antigo revoga a família** e o novo token também deixa de funcionar; logout revoga.
 - [ ] **Step 2:** Rodar e ver falhar; implementar os casos de uso; verde.
@@ -153,7 +158,8 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - `UserRepository.mutate` com transação e lock de linha (`SELECT ... FOR UPDATE`) no Prisma; teste de integração de concorrência contra o Postgres.
 - Índice UNIQUE em `email` (P2002 -> `ConflictError`); índices em `tokenHash` (unique), `familyId` e `userId`; `revokeFamily`/`revokeAllByUser` com `updateMany ... WHERE revokedAt IS NULL`.
 - Throttler (rate limit por IP) em `/auth/login`, `/auth/register` e `/auth/refresh`; DTO de login com senha de no máximo 128 caracteres e limite de tamanho do body.
-- O guard JWT usa `JwtTokenService.verifyAccess` (não `@nestjs/jwt` com config própria) e rejeita usuário inativo (consulta o repositório).
+- O guard JWT é global (`APP_GUARD`, fail-closed, `@Public()` para exceções), usa `JwtTokenService.verifyAccess` (não `@nestjs/jwt`) e rejeita usuário inativo (consulta o repositório).
+- Throttle do login por IP + e-mail normalizado, além do limite por IP; `TRUST_PROXY` só `false` ou inteiro >= 1; texto sem NUL/surrogates soltos (domínio e DTO).
 - `.env.example` instrui gerar segredos com `openssl rand -base64 48`.
 
 - [ ] **Step 5:** Commit `feat(auth): register, login, refresh rotation, logout`.
