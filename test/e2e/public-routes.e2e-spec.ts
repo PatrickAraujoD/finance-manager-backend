@@ -81,6 +81,10 @@ describe('public route inventory', () => {
         'GET /expenses/:id',
         'PATCH /expenses/:id',
         'DELETE /expenses/:id',
+        'GET /reports/by-category',
+        'GET /reports/by-day',
+        'GET /reports/monthly-evolution',
+        'GET /reports/income-vs-spent',
       ]),
     );
   });
