@@ -47,7 +47,7 @@ export class CreateExpenseDto {
 
   @ValidateIf(present)
   @IsString()
-  @CleanText()
+  @CleanText({ multiline: true })
   @MaxLength(DESCRIPTION_BOUND)
   description?: string;
 }
@@ -71,7 +71,7 @@ export class UpdateExpenseDto {
 
   @ValidateIf(present)
   @IsString()
-  @CleanText()
+  @CleanText({ multiline: true })
   @MaxLength(DESCRIPTION_BOUND)
   description?: string;
 

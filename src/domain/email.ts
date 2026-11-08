@@ -6,8 +6,9 @@ export class Email {
   private constructor(readonly value: string) {}
 
   static create(raw: string): Email {
-    requireCleanText(raw, 'Email');
+    // Surrounding whitespace (including a stray newline) is trimmed, as before; inside, no control.
     const normalized = raw.trim().toLowerCase();
+    requireCleanText(normalized, 'Email');
     if (!isEmail(normalized)) {
       throw new ValidationError('Invalid email');
     }
