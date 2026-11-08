@@ -1,10 +1,20 @@
-import { ESLint } from 'eslint';
+import { spawnSync } from 'child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
+// Runs the ESLint CLI in a child process: the programmatic API loads the flat
+// config via dynamic import, which Jest only supports with
+// --experimental-vm-modules.
 async function lint(filePath: string, code: string) {
-  const eslint = new ESLint({ cwd: process.cwd() });
-  const [result] = await eslint.lintText(code, { filePath });
+  const bin = join(process.cwd(), 'node_modules/eslint/bin/eslint.js');
+  const run = spawnSync(
+    process.execPath,
+    [bin, '--stdin', '--stdin-filename', filePath, '--format', 'json'],
+    { cwd: process.cwd(), input: code, encoding: 'utf8' },
+  );
+  const [result] = JSON.parse(run.stdout) as Array<{
+    messages: Array<{ severity: number }>;
+  }>;
   return result.messages;
 }
 

@@ -1,16 +1,21 @@
-import lint from '@commitlint/lint';
-import load from '@commitlint/load';
+import { spawnSync } from 'child_process';
+import { join } from 'path';
 
-async function check(message: string) {
-  const config = await load({}, { cwd: process.cwd() });
-  return lint(message, config.rules, {
-    parserOpts: config.parserPreset?.parserOpts,
+// Runs the commitlint CLI in a child process: @commitlint/* are ESM-only,
+// which Jest cannot require without --experimental-vm-modules.
+function check(message: string) {
+  const bin = join(process.cwd(), 'node_modules/@commitlint/cli/cli.js');
+  const run = spawnSync(process.execPath, [bin], {
+    cwd: process.cwd(),
+    input: message,
+    encoding: 'utf8',
   });
+  return { valid: run.status === 0 };
 }
 
 describe('commit convention', () => {
-  it('accepts a conventional commit without scope', async () => {
-    const result = await check('feat: add login');
+  it('accepts a conventional commit without scope', () => {
+    const result = check('feat: add login');
     expect(result.valid).toBe(true);
   });
 
@@ -20,8 +25,8 @@ describe('commit convention', () => {
     ['uppercase type', 'FEAT: x'],
     ['capitalized subject and trailing period', 'feat: Add login.'],
     ['header longer than 72 chars', `feat: ${'a'.repeat(70)}`],
-  ])('rejects %s', async (_name, message) => {
-    const result = await check(message);
+  ])('rejects %s', (_name, message) => {
+    const result = check(message);
     expect(result.valid).toBe(false);
   });
 });
