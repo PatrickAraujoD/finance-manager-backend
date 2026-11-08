@@ -11,6 +11,8 @@ const forbiddenInCore = [
   'passport-jwt',
   'tesseract.js',
   'pdf-parse',
+  'file-type',
+  'image-size',
   'multer',
   'helmet',
   'express',
