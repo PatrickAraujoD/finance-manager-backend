@@ -149,7 +149,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - [ ] **Step 4:** Controller + DTOs (class-validator, whitelist, `forbidNonWhitelisted`), guards, filtro de erros; throttler global e limite mais baixo em `/auth/*`; `helmet`. E2E: registrar → login → rota protegida 200; sem token 401; token expirado 401; 6ª tentativa seguida de login em 1 min → 429.
 
 **Requisitos da Parte B (revisão de segurança da Parte A):**
-- Rotação do refresh com `revokeIfActive`; revogar + emitir o novo token na mesma transação (se a emissão falhar, a sessão não se perde).
+- Rotação do refresh atômica via `RefreshTokenRepository.rotate(oldId, replacement, now)`: numa única transação revoga o antigo somente se ainda ativo e grava o novo (atendido por `rotate`; se a gravação falhar, nada é revogado; o access token é assinado antes, então falha de emissão não perde a sessão).
 - `UserRepository.mutate` com transação e lock de linha (`SELECT ... FOR UPDATE`) no Prisma; teste de integração de concorrência contra o Postgres.
 - Índice UNIQUE em `email` (P2002 -> `ConflictError`); índices em `tokenHash` (unique), `familyId` e `userId`; `revokeFamily`/`revokeAllByUser` com `updateMany ... WHERE revokedAt IS NULL`.
 - Throttler (rate limit por IP) em `/auth/login`, `/auth/register` e `/auth/refresh`; DTO de login com senha de no máximo 128 caracteres e limite de tamanho do body.
