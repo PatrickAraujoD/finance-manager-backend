@@ -1,6 +1,6 @@
 import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
+import { DiscoveryService, MetadataScanner, ModulesContainer, Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../../src/presentation/http/decorators/public.decorator';
 import { startApp, TestApp } from './support/test-app';
 
@@ -10,8 +10,8 @@ interface RouteInfo {
 }
 
 function listRoutes(t: TestApp): RouteInfo[] {
-  const discovery = t.app.get(DiscoveryService);
-  const scanner = t.app.get(MetadataScanner);
+  const discovery = new DiscoveryService(t.app.get(ModulesContainer));
+  const scanner = new MetadataScanner();
   const reflector = t.app.get(Reflector);
   const routes: RouteInfo[] = [];
   for (const wrapper of discovery.getControllers()) {
