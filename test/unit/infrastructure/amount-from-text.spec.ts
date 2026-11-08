@@ -136,6 +136,45 @@ describe('amountFromText', () => {
     });
   });
 
+  describe('a payment that is not settled', () => {
+    it.each([
+      'Pix devolvido\nValor R$ 100,00',
+      'Comprovante de devolu\u00e7\u00e3o\nValor R$ 100,00',
+      'Reembolso\nValor R$ 100,00',
+      'Pagamento expirado\nValor R$ 100,00',
+      'Transfer\u00eancia n\u00e3o efetivada\nValor R$ 100,00',
+      'Pagamento n\u00e3o conclu\u00eddo\nValor R$ 100,00',
+      'Pagamento em processamento\nValor R$ 100,00',
+      'Aguardando pagamento\nValor R$ 100,00',
+      'Pagamento em an\u00e1lise\nValor R$ 100,00',
+      'Boleto gerado\nValor R$ 100,00',
+      'QR Code gerado\nValor R$ 100,00',
+      'Or\u00e7amento\nValor R$ 100,00',
+      'Proposta\nValor R$ 100,00',
+      'Valor R$ 100,00 (previsto)',
+    ])('gives null for %j', (text) => {
+      expect(cents(text)).toBeNull();
+    });
+
+    it.each([
+      'Pagamento efetivado\nValor R$ 100,00',
+      'Pix enviado com sucesso\nValor R$ 100,00',
+      'Transfer\u00eancia conclu\u00edda\nValor R$ 100,00',
+      'Pagamento realizado\nValor R$ 100,00',
+    ])('still suggests the amount for the real receipt %j', (text) => {
+      expect(cents(text)).toBe(10000);
+    });
+  });
+
+  describe('card statements', () => {
+    it.each([
+      'Fatura\nTotal R$ 900,00\nPagamento minimo',
+      'Fatura\nTotal R$ 900,00\nPagamento m\u00ednimo R$ 135,00',
+    ])('gives null for %j', (text) => {
+      expect(cents(text)).toBeNull();
+    });
+  });
+
   describe('section labels around the label', () => {
     it.each([
       'Tarifa\nValor R$ 3,50',
