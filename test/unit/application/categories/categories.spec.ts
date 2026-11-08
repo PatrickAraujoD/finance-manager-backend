@@ -1,4 +1,7 @@
-import { CreateCategory } from '../../../../src/application/use-cases/categories/create-category';
+import {
+  CreateCategory,
+  MAX_OWNED_CATEGORIES,
+} from '../../../../src/application/use-cases/categories/create-category';
 import { DeleteCategory } from '../../../../src/application/use-cases/categories/delete-category';
 import { ListCategories } from '../../../../src/application/use-cases/categories/list-categories';
 import { UpdateCategory } from '../../../../src/application/use-cases/categories/update-category';
@@ -77,6 +80,42 @@ describe('CreateCategory', () => {
     const { id } = await create.execute(ana, { name: 'Casa   e  lazer' });
     expect((await categories.findById(id))?.name).toBe('Casa e lazer');
     await expect(create.execute(ana, { name: 'casa e lazer' })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  describe('per-user ceiling', () => {
+    it('is 100 personal categories', () => {
+      expect(MAX_OWNED_CATEGORIES).toBe(100);
+    });
+
+    it('rejects the 101st personal category with a clear ConflictError', async () => {
+      const { create, categories } = setup();
+      for (let i = 0; i < MAX_OWNED_CATEGORIES; i++) await create.execute(ana, { name: `c${i}` });
+      await expect(create.execute(ana, { name: 'one too many' })).rejects.toThrow(
+        /at most 100 personal categories/,
+      );
+      await expect(create.execute(ana, { name: 'one too many' })).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+      expect(await categories.countOwnedBy('ana')).toBe(MAX_OWNED_CATEGORIES);
+    });
+
+    it('does not count global categories or other users toward the ceiling', async () => {
+      const { create } = setup();
+      for (let i = 0; i < MAX_OWNED_CATEGORIES; i++) {
+        await create.execute(admin, { name: `g${i}`, global: true });
+        await create.execute(bob, { name: `b${i}` });
+      }
+      await expect(create.execute(ana, { name: 'mine' })).resolves.toBeDefined();
+      await expect(create.execute(admin, { name: 'another', global: true })).resolves.toBeDefined();
+    });
+
+    it('frees a slot when a category is deleted', async () => {
+      const { create, remove } = setup();
+      let last = '';
+      for (let i = 0; i < MAX_OWNED_CATEGORIES; i++) last = (await create.execute(ana, { name: `c${i}` })).id;
+      await remove.execute(ana, last);
+      await expect(create.execute(ana, { name: 'again' })).resolves.toBeDefined();
+    });
   });
 
   it('allows the same name for different owners and for a personal vs a global one', async () => {

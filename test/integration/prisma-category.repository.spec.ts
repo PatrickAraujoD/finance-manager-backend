@@ -102,6 +102,16 @@ describe('PrismaCategoryRepository (Postgres)', () => {
     expect(names).toEqual(['alpha', 'Food', 'Zebra']);
   });
 
+  it('countOwnedBy counts only the personal categories of that user', async () => {
+    await repo.save(cat('c1', 'A', 'u1'));
+    await repo.save(cat('c2', 'B', 'u1'));
+    await repo.save(cat('c3', 'C', 'u2'));
+    await repo.save(cat('g1', 'Food', null));
+    expect(await repo.countOwnedBy('u1')).toBe(2);
+    expect(await repo.countOwnedBy('u2')).toBe(1);
+    expect(await repo.countOwnedBy('nobody')).toBe(0);
+  });
+
   it('isInUse is true only while an expense references the category', async () => {
     await repo.save(cat('c1', 'Mercado', 'u1'));
     expect(await repo.isInUse('c1')).toBe(false);
