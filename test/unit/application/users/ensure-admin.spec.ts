@@ -72,7 +72,7 @@ describe('EnsureAdmin', () => {
 
   it('never leaks the password in an error message', async () => {
     const { useCase } = setup();
-    const secret = 'short-secret';
+    const secret = 'short-pw';
     await expect(useCase.execute({ email: 'a@x.com', password: secret })).rejects.toThrow(
       expect.not.objectContaining({ message: expect.stringContaining(secret) }),
     );
