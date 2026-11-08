@@ -1,12 +1,12 @@
 import { Email } from '../../../domain/email';
 import { User } from '../../../domain/entities/user';
-import { ConflictError, ValidationError } from '../../../domain/errors';
+import { ConflictError } from '../../../domain/errors';
 import { IdGenerator } from '../../ports/id-generator';
 import { PasswordHasher } from '../../ports/password-hasher';
 import { UserRepository } from '../../ports/user-repository';
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, requireValidPassword } from './password-policy';
 
-export const MIN_PASSWORD_LENGTH = 12;
-export const MAX_PASSWORD_LENGTH = 128;
+export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH };
 
 export interface RegisterUserInput {
   name: string;
@@ -23,11 +23,7 @@ export class RegisterUser {
 
   async execute(input: RegisterUserInput): Promise<{ id: string }> {
     const { password } = input;
-    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
-      throw new ValidationError(
-        `Password must have between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`,
-      );
-    }
+    requireValidPassword(password);
     const email = Email.create(input.email);
     if (await this.users.findByEmail(email)) throw new ConflictError('Email already registered');
 
