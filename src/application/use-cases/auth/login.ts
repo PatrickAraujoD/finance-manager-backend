@@ -45,7 +45,11 @@ export class Login {
       throw this.invalid();
     }
     const now = this.clock.now();
-    if (user.isLocked(now)) throw this.invalid();
+    if (user.isLocked(now)) {
+      // Same cost as a real attempt, so a locked account is not distinguishable by timing.
+      await this.hasher.verify(DUMMY_HASH, input.password);
+      throw this.invalid();
+    }
 
     const passwordOk = await this.hasher.verify(user.passwordHash, input.password);
     if (!passwordOk) {
