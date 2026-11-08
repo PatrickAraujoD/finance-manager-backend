@@ -198,7 +198,7 @@ describe('Category', () => {
   });
 
   it('stores the name in NFC with repeated inner whitespace collapsed to one space', () => {
-    const c = Category.create({ id: 'c1', name: '  Cafe\u0301 \t  da   \n manha  ', ownerId: null });
+    const c = Category.create({ id: 'c1', name: '  Cafe\u0301 \u00a0  da   \u2003 manha  ', ownerId: null });
     expect(c.name).toBe('Caf\u00e9 da manha');
     expect(c.name).toBe(c.name.normalize('NFC'));
   });
