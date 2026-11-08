@@ -13,7 +13,7 @@ function startsWith(buffer: Buffer, signature: Buffer): boolean {
  * handful of bytes: it never parses the container, so no input can make it throw or spin (the
  * general-purpose file-type library did both on malformed ASF/TIFF files).
  */
-export class FileTypeLibDetector implements FileTypeDetector {
+export class MagicBytesFileTypeDetector implements FileTypeDetector {
   async detect(buffer: Buffer): Promise<string | null> {
     if (startsWith(buffer, PDF)) return 'application/pdf';
     if (startsWith(buffer, PNG)) return 'image/png';

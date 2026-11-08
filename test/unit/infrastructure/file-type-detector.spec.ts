@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
-import { FileTypeLibDetector } from '../../../src/infrastructure/extraction/file-type-detector';
+import { MagicBytesFileTypeDetector } from '../../../src/infrastructure/extraction/file-type-detector';
 import { ValidationError } from '../../../src/domain/errors';
 import { UploadReceipt } from '../../../src/application/use-cases/receipts/upload-receipt';
 import { FakeFileStorage } from '../../support/fakes/fake-file-storage';
@@ -17,8 +17,8 @@ function asfBomb(): Buffer {
   return Buffer.concat([header, Buffer.alloc(14 + 16 + 8 + 200)]);
 }
 
-describe('FileTypeLibDetector (magic bytes)', () => {
-  const detector = new FileTypeLibDetector();
+describe('MagicBytesFileTypeDetector (magic bytes)', () => {
+  const detector = new MagicBytesFileTypeDetector();
 
   it('detects PDF, PNG and JPEG', async () => {
     expect(await detector.detect(fixture('comprovante-texto.pdf'))).toBe('application/pdf');
