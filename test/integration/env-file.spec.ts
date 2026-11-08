@@ -129,12 +129,13 @@ describe('.env loading by the npm scripts', () => {
     await expect(fetch(`http://127.0.0.1:${filePort}/health`)).rejects.toThrow();
   }, 120_000);
 
-  it('a missing .env is not an error by itself (the config check reports what is missing)', async () => {
+  it('a missing .env only warns; the config check then fails the start with exit code 1', async () => {
     const child = run(scriptCommand('start:dev', join(dir, 'does-not-exist.env')));
     const output = collect(child);
-    expect(await output.exited).not.toBe(0);
+    expect(await output.exited).toBe(1);
     expect(output.text()).toContain('Invalid environment configuration');
-    expect(output.text()).not.toMatch(/not found|ENOENT/i);
+    // Node only warns ("not found. Continuing without it."); it never aborts on its own.
+    expect(output.text()).not.toMatch(/ENOENT|cannot find/i);
   }, 120_000);
 
   describe('seed', () => {
