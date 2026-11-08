@@ -65,11 +65,16 @@ export class User {
   }
 
   registerFailedLogin(now: Date, maxAttempts: number, lockMinutes: number): User {
-    const failedLogins = this.props.failedLogins + 1;
+    if (this.isLocked(now)) return this;
+    const { lockedUntil: previousLock } = this.props;
+    const lockExpired = previousLock !== null && now.getTime() >= previousLock.getTime();
+    const failedLogins = (lockExpired ? 0 : this.props.failedLogins) + 1;
     const lockedUntil =
       failedLogins >= maxAttempts
         ? new Date(now.getTime() + lockMinutes * 60_000)
-        : this.props.lockedUntil;
+        : lockExpired
+          ? null
+          : previousLock;
     return new User({ ...this.props, failedLogins, lockedUntil });
   }
 
