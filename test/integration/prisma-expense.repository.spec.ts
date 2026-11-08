@@ -282,14 +282,14 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     });
 
     it('rejects an amount above the ceiling in the database itself (CHECK)', async () => {
-      const insert = (id: string, cents: number) =>
+      const insert = (id: string, cents: number | string) =>
         prisma.client.$executeRawUnsafe(
           `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
            VALUES ('${id}','u1','c1',${cents},true,'2026-11-01')`,
         );
       await expect(insert('at-ceiling', 1_000_000_000)).resolves.toBe(1);
       await expect(insert('over-ceiling', 1_000_000_001)).rejects.toThrow();
-      await expect(insert('way-over', 9007199254740993)).rejects.toThrow();
+      await expect(insert('way-over', '9007199254740993')).rejects.toThrow();
     });
 
     it('fails loudly (never rounds) for a stored value beyond the safe integer range', async () => {

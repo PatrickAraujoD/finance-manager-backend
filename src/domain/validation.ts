@@ -4,8 +4,10 @@ import { ValidationError } from './errors';
 const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 // C0 and C1 controls plus DEL. Multiline text keeps TAB (U+0009) and LF (U+000A).
+/* eslint-disable no-control-regex -- matching control characters is the point */
 const CONTROL_SINGLE_LINE = /[\u0000-\u001f\u007f-\u009f]/;
 const CONTROL_MULTILINE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
+/* eslint-enable no-control-regex */
 
 export interface TextOptions {
   /** Allows TAB and LF (free text such as a description). Every other control stays rejected. */
