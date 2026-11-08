@@ -21,7 +21,9 @@ ADMIN_EMAIL=voce@exemplo.com ADMIN_PASSWORD='...' npm run seed
 ```
 
 O seed e idempotente: se ja existir uma conta com esse e-mail, nada e alterado (a senha de um
-admin existente nunca e sobrescrita) e a senha nunca e impressa. Depois, o admin gerencia papeis e
+admin existente nunca e sobrescrita) e a senha nunca e impressa. Se a conta existente nao for um admin ativo (usuario normal ou admin
+inativo), o seed avisa "Account exists but is not an active admin; promote it manually" e termina
+com codigo 1: ele nunca promove ninguem sozinho. Depois, o admin gerencia papeis e
 ativacao em `GET /users` e `PATCH /users/:id`.
 
 ## Testes
