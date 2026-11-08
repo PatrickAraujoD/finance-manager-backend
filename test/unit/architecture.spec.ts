@@ -27,16 +27,30 @@ describe('layer boundaries', () => {
 
   describe('with a real target file', () => {
     const dir = join(process.cwd(), 'src/application/__arch_tmp__');
+    const infraDir = join(process.cwd(), 'src/infrastructure/__arch_tmp__');
     beforeAll(() => {
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'target.ts'), 'export type Target = string;\n');
+      mkdirSync(infraDir, { recursive: true });
+      writeFileSync(join(infraDir, 'target.ts'), 'export type Target = string;\n');
     });
-    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+    afterAll(() => {
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(infraDir, { recursive: true, force: true });
+    });
 
     it('rejects domain importing from application', async () => {
       const messages = await lint(
         'src/domain/fake.ts',
         "import type { Target } from '../application/__arch_tmp__/target';\nexport type X = Target;\n",
+      );
+      expect(messages.some((m) => m.severity === 2)).toBe(true);
+    });
+
+    it('rejects application importing from infrastructure', async () => {
+      const messages = await lint(
+        'src/application/fake.ts',
+        "import type { Target } from '../infrastructure/__arch_tmp__/target';\nexport type X = Target;\n",
       );
       expect(messages.some((m) => m.severity === 2)).toBe(true);
     });
