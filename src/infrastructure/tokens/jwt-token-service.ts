@@ -6,7 +6,7 @@ import {
   RefreshTokenPair,
   TokenService,
 } from '../../application/ports/token-service';
-import { UnauthorizedError, ValidationError } from '../../domain/errors';
+import { UnauthorizedError } from '../../domain/errors';
 import { parseRole } from '../../domain/role';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
@@ -49,14 +49,8 @@ export class JwtTokenService implements TokenService {
         throw new UnauthorizedError('Invalid token');
       }
       return { sub: decoded.sub, role: parseRole(String(decoded.role)) };
-    } catch (e) {
-      if (e instanceof UnauthorizedError) throw e;
-      if (e instanceof ValidationError || e instanceof jwt.JsonWebTokenError) {
-        throw new UnauthorizedError('Invalid token');
-      }
-      if (e instanceof jwt.TokenExpiredError || e instanceof jwt.NotBeforeError) {
-        throw new UnauthorizedError('Invalid token');
-      }
+    } catch {
+      // Any failure (bad signature, expiry, wrong alg, bad claims) looks the same to callers.
       throw new UnauthorizedError('Invalid token');
     }
   }
