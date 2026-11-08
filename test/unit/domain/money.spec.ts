@@ -1,4 +1,5 @@
 import numbro from "numbro";
+import { ValidationError } from "../../../src/domain/errors";
 import { Money } from "../../../src/domain/money";
 
 describe("Money", () => {
@@ -29,6 +30,22 @@ describe("Money", () => {
     const b = Money.fromCents(250);
     expect(a.add(b).cents).toBe(1250);
     expect(a.subtract(b).cents).toBe(750);
+  });
+
+  it("rejects add and subtract results that are not safe integers", () => {
+    const max = Money.fromCents(Number.MAX_SAFE_INTEGER);
+    expect(() => max.add(Money.fromCents(1))).toThrow(ValidationError);
+    expect(() =>
+      Money.fromCents(-Number.MAX_SAFE_INTEGER).subtract(Money.fromCents(1)),
+    ).toThrow(ValidationError);
+  });
+
+  it("never yields negative zero from arithmetic", () => {
+    const a = Money.fromCents(100);
+    expect(Object.is(a.subtract(a).cents, 0)).toBe(true);
+    expect(
+      Object.is(Money.fromCents(-100).add(Money.fromCents(100)).cents, 0),
+    ).toBe(true);
   });
 
   it("detects negative values and compares equality", () => {
