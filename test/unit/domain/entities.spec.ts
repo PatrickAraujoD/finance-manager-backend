@@ -78,6 +78,34 @@ describe('User', () => {
     expect(u.isLocked(new Date('2026-11-08T11:00:00Z'))).toBe(false);
   });
 
+  it('does not lock on 4 failures and locks on the 5th', () => {
+    let u = User.create(userProps);
+    for (let i = 0; i < 4; i++) u = u.registerFailedLogin(now, 5, 15);
+    expect(u.failedLogins).toBe(4);
+    expect(u.lockedUntil).toBeNull();
+    u = u.registerFailedLogin(now, 5, 15);
+    expect(u.isLocked(now)).toBe(true);
+  });
+
+  it('ignores failures during the lock without sliding it', () => {
+    let u = User.create(userProps);
+    for (let i = 0; i < 5; i++) u = u.registerFailedLogin(now, 5, 15);
+    const later = new Date('2026-11-08T10:10:00Z');
+    const after = u.registerFailedLogin(later, 5, 15);
+    expect(after.lockedUntil).toEqual(u.lockedUntil);
+    expect(after.failedLogins).toBe(u.failedLogins);
+  });
+
+  it('restarts the counter after the lock expires', () => {
+    let u = User.create(userProps);
+    for (let i = 0; i < 5; i++) u = u.registerFailedLogin(now, 5, 15);
+    const expired = new Date('2026-11-08T10:15:00Z');
+    const after = u.registerFailedLogin(expired, 5, 15);
+    expect(after.failedLogins).toBe(1);
+    expect(after.lockedUntil).toBeNull();
+    expect(after.isLocked(expired)).toBe(false);
+  });
+
   it('resets failed logins and the lock', () => {
     let u = User.create(userProps);
     for (let i = 0; i < 5; i++) u = u.registerFailedLogin(now, 5, 15);
