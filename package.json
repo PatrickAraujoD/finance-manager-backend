@@ -77,5 +77,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "multer": "^2.5.0"
+  }
 }
