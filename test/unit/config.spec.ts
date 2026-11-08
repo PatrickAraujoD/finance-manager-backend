@@ -3,7 +3,6 @@ import { loadConfig } from '../../src/presentation/http/config';
 const valid = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
   JWT_ACCESS_SECRET: 'a'.repeat(32),
-  JWT_REFRESH_SECRET: 'b'.repeat(32),
   UPLOAD_DIR: './uploads',
 };
 
@@ -23,10 +22,13 @@ describe('loadConfig', () => {
     expect(config).toMatchObject({
       databaseUrl: valid.DATABASE_URL,
       jwtAccessSecret: valid.JWT_ACCESS_SECRET,
-      jwtRefreshSecret: valid.JWT_REFRESH_SECRET,
       uploadDir: valid.UPLOAD_DIR,
       port: 3000,
     });
+  });
+
+  it('does not require or expose a refresh secret (refresh tokens are opaque)', () => {
+    expect(loadConfig(valid)).not.toHaveProperty('jwtRefreshSecret');
   });
 
   it('defaults the HTTP hardening options', () => {

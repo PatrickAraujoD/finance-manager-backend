@@ -14,7 +14,6 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     databaseUrl: testDatabaseUrl(),
     jwtAccessSecret: ACCESS_SECRET,
-    jwtRefreshSecret: 'b'.repeat(48),
     uploadDir: './uploads',
     port: 0,
     corsOrigins: [],
