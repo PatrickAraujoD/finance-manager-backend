@@ -190,6 +190,12 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - HTTP: `GET /users`, `PATCH /users/:id` (`@Roles('A')`, DTO com `ValidateIf` para rejeitar `null`), `GET/POST /categories`, `PATCH/DELETE /categories/:id` (204); ids com `ParseUUIDPipe` (400). Nenhuma nova rota pública (inventário continua com as 5).
 - Seed: `prisma/seed.ts` (`npm run seed`), caso de uso `EnsureAdmin` (regra de senha extraída para `auth/password-policy.ts` e compartilhada com `RegisterUser`); idempotente, nunca altera conta existente nem imprime a senha. Documentado no README/.env.example.
 
+**Ajustes da revisão da Tarefa 5 (implementados):**
+- Seed: `EnsureAdmin` devolve `{created, state}` com `state` em `created | admin-exists | not-admin`. Conta existente que não é admin ATIVO (usuário `N` ou admin inativo) -> `not-admin`: nada é alterado (nunca promove), o seed (`runSeedCli`) escreve "Account exists but is not an active admin; promote it manually" e sai com código 1. Admin ativo -> "nothing changed", código 0. A senha nunca é logada. Corrida entre dois seeds: o perdedor reclassifica o vencedor.
+- `Category.create` guarda o nome em NFC, com espaços internos repetidos colapsados em um e com trim; `nameKey` deriva desse nome (`'a  b'` e `'a b'` colidem). O limite de 60 é medido em pontos de código (`Array.from(name).length`); o DTO usa só um limite frouxo de 120 unidades UTF-16 e o domínio decide.
+- Teto de 100 categorias PRÓPRIAS por usuário (`MAX_OWNED_CATEGORIES` em `create-category.ts`): o 101º `CreateCategory` -> `ConflictError` (409); globais não contam. Porta `CategoryRepository.countOwnedBy(userId)` (fake e Prisma). É count-then-insert, então criações simultâneas podem ultrapassar o teto por pouco; aceitável para um limite de segurança leve.
+- `GET /users` e `GET /categories` seguem sem paginação, mas `MAX_LIST_RESULTS = 500` (`src/application/ports/limits.ts`) vira `take` nos repositórios Prisma (ordenação estável). Paginação real fica para depois, se for necessária.
+
 ### Task 6: Renda mensal
 
 **Files:**
@@ -202,6 +208,13 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
 - [ ] **Step 1:** Testes: upsert sobrescreve o mês; valor ≤ 0 → `ValidationError`; mês `2026-13` → erro; usuário só vê o próprio salário. Ver falhar.
 - [ ] **Step 2:** Implementar, e2e, verde.
 - [ ] **Step 3:** Commit `feat: monthly income`.
+
+**Decisões e desvios da Tarefa 6 (implementada):**
+- Casos de uso `SetMonthlyIncome.execute(actor, {month, amountCents})` (devolve `{month, amountCents}`) e `GetMonthlyIncome.execute(actor, month)` (`{month, amountCents} | null`). O dono é sempre `actor.id`: não há `userId` na rota nem no corpo (campo extra -> 400), e admin também só enxerga o próprio.
+- Valor máximo: `MAX_INCOME_CENTS = 100_000_000_000` (R$ 1 bilhão), no domínio (`MonthlyIncome.create`, `ValidationError`); muito abaixo de `MAX_SAFE_INTEGER`, então somas de relatórios não estouram. `requireMonth` (regex estrita `YYYY-MM`, mês 01-12) é exportado e usado também no `GET`.
+- DTO `SetIncomeDto`: `@IsInt() @Min(1) @Max(MAX_INCOME_CENTS)`; sem conversão implícita, então string, float, null, booleano, array, 0, negativo e gigante -> 400.
+- Prisma: `MonthlyIncome` com PK composta `(userId, month)`, `amountCents BIGINT`, CHECK de formato do mês (`~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`) e CHECK `amountCents > 0` (SQL na migration `20261108190000_monthly_income`). FK `ON DELETE CASCADE` (decisão: a linha não tem sentido sem o usuário e é só dado derivado; diferente de gastos/categorias, que usam Restrict). `PrismaIncomeRepository.upsert` usa o `upsert` do Prisma sobre a PK composta (um único `INSERT ... ON CONFLICT DO UPDATE`): dois upserts simultâneos no mesmo mês não falham e vence um dos dois (teste de integração repete 10 vezes). Na leitura, BIGINT acima de `MAX_SAFE_INTEGER` -> erro, nunca arredonda.
+- HTTP: `PUT /income/:month` -> 200 `{month, amountCents}`; `GET /income/:month` -> 200 com o valor ou 404 quando não há salário (escolha: o recurso "renda do mês" não existe; o relatório da Tarefa 9 consome o caso de uso e trata ausência como `null`, não o HTTP). `:month` inválido (`2026-13`, `2026-00`, `26-1`, `2026-1`) -> 400 via `ValidationError` do domínio (sem pipe separado). Nenhuma rota pública nova (inventário continua com 5).
 
 ### Task 7: Comprovantes e extração
 
