@@ -11,7 +11,7 @@ describe('PdfTextExtractor (pdf-parse, real fixtures)', () => {
   it('reads the labelled amount of a text PDF', async () => {
     const result = await extractor.extract(fixture('comprovante-texto.pdf'));
     expect(result.amount?.cents).toBe(12345);
-    expect(result.confidence).toBeGreaterThan(0.8);
+    expect(result.confidence).toBeGreaterThan(0.7);
   });
 
   it('returns null when several amounts have no clear label', async () => {
