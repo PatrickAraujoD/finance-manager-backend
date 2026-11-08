@@ -11,14 +11,15 @@ import { PrismaService } from './prisma.service';
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 
 /**
- * `[first day of the month, first day of the next month)` as `YYYY-MM-DD` strings, computed in
- * UTC. They are bound as parameters and cast to DATE by the database: `spentAt` is a calendar
+ * `[first day of the month, first day of the next month)` as `YYYY-MM-DD` strings, computed with
+ * integer arithmetic (no `Date`, which maps years 0 to 99 to 1900 to 1999). They are bound as parameters and cast to DATE by the database: `spentAt` is a calendar
  * date, so no time zone is involved. Inputs are validated by the use cases.
  */
 function monthWindow(fromMonth: string, toMonth: string): { start: string; end: string } {
   const [toYear, toMon] = [Number(toMonth.slice(0, 4)), Number(toMonth.slice(5, 7))];
-  const next = new Date(Date.UTC(toYear, toMon, 1));
-  return { start: `${fromMonth}-01`, end: next.toISOString().slice(0, 10) };
+  const [nextYear, nextMon] = toMon === 12 ? [toYear + 1, 1] : [toYear, toMon + 1];
+  const end = `${String(nextYear).padStart(4, '0')}-${String(nextMon).padStart(2, '0')}-01`;
+  return { start: `${fromMonth}-01`, end };
 }
 
 function sum(rows: { total: bigint }[], what: string): Money[] {
@@ -47,7 +48,7 @@ export function categoryTotalsSql(userId: string, month: string): Prisma.Sql {
 export function dayTotalsSql(userId: string, month: string): Prisma.Sql {
   const { start, end } = monthWindow(month, month);
   return Prisma.sql`
-    SELECT to_char(e."spentAt", 'YYYY-MM-DD') AS "date", SUM(e."amountCents")::bigint AS "total"
+    SELECT to_char(e."spentAt"::timestamp, 'YYYY-MM-DD') AS "date", SUM(e."amountCents")::bigint AS "total"
     FROM "Expense" e
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
     GROUP BY e."spentAt"
@@ -57,10 +58,10 @@ export function dayTotalsSql(userId: string, month: string): Prisma.Sql {
 export function monthTotalsSql(userId: string, fromMonth: string, toMonth: string): Prisma.Sql {
   const { start, end } = monthWindow(fromMonth, toMonth);
   return Prisma.sql`
-    SELECT to_char(e."spentAt", 'YYYY-MM') AS "month", SUM(e."amountCents")::bigint AS "total"
+    SELECT to_char(e."spentAt"::timestamp, 'YYYY-MM') AS "month", SUM(e."amountCents")::bigint AS "total"
     FROM "Expense" e
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
-    GROUP BY to_char(e."spentAt", 'YYYY-MM')
+    GROUP BY to_char(e."spentAt"::timestamp, 'YYYY-MM')
     ORDER BY "month" ASC`;
 }
 
