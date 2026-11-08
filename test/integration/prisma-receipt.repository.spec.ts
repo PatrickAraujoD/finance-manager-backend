@@ -1,3 +1,4 @@
+import { ConflictError } from '../../src/domain/errors';
 import { Email } from '../../src/domain/email';
 import { Receipt } from '../../src/domain/entities/receipt';
 import { User } from '../../src/domain/entities/user';
@@ -66,6 +67,25 @@ describe('PrismaReceiptRepository (Postgres)', () => {
     await repo.save(receipt());
     await repo.save(receipt({ suggestedAmount: Money.fromCents(99) }));
     expect((await repo.findById('r1'))?.suggestedAmount?.cents).toBe(99);
+  });
+
+  it('never hands a receipt over to another user: saving an existing id as someone else fails', async () => {
+    await new PrismaUserRepository(prisma).save(
+      User.create({
+        id: 'u2',
+        name: 'u2',
+        email: Email.create('u2@x.com'),
+        passwordHash: 'h',
+        role: 'N',
+      }),
+    );
+    await repo.save(receipt());
+    await expect(
+      repo.save(receipt({ userId: 'u2', suggestedAmount: Money.fromCents(1) })),
+    ).rejects.toThrow(ConflictError);
+    const stored = await repo.findById('r1');
+    expect(stored?.userId).toBe('u1');
+    expect(stored?.suggestedAmount?.cents).toBe(12345);
   });
 
   it('rejects a duplicated storage key', async () => {
