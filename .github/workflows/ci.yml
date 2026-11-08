@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Uma nova execucao na mesma branch/PR cancela a anterior (economiza minutos e evita corrida).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Permissoes minimas do GITHUB_TOKEN: so leitura do codigo.
+permissions:
+  contents: read
+
+env:
+  # O script "prepare" instala o husky; no CI nao queremos hooks de git.
+  HUSKY: '0'
+  NODE_VERSION: '22'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint e tipos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
+  unit:
+    name: Testes unitarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm test
+
+  integration-e2e:
+    name: Integracao e e2e (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Credenciais descartaveis de um banco que so existe durante este job (nao e segredo).
+          POSTGRES_USER: finance
+          POSTGRES_PASSWORD: finance
+          POSTGRES_DB: finance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finance -d finance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Os testes recusam bancos cujo nome nao termina em _test; o global-setup cria o banco.
+      DATABASE_URL: postgresql://finance:finance@localhost:5432/finance_test
+      TEST_DATABASE_URL: postgresql://finance:finance@localhost:5432/finance_test
+      PORT: '3000'
+      TRUST_PROXY: 'false'
+      CORS_ORIGINS: ''
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Preparar segredo e diretorio de upload temporarios
+        run: |
+          # Segredo gerado a cada execucao: nunca fixo no repositorio e mascarado nos logs.
+          secret="$(openssl rand -base64 48)"
+          echo "::add-mask::${secret}"
+          echo "JWT_ACCESS_SECRET=${secret}" >> "$GITHUB_ENV"
+          upload_dir="$(mktemp -d "${RUNNER_TEMP}/uploads.XXXXXX")"
+          chmod 700 "${upload_dir}"
+          echo "UPLOAD_DIR=${upload_dir}" >> "$GITHUB_ENV"
+      - name: Garantir procps (a vigia de memoria do PDF usa ps fora do Linux /proc)
+        run: command -v ps >/dev/null || (sudo apt-get update && sudo apt-get install -y procps)
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Testes de integracao
+        run: npm run test:integration
+      - name: Testes e2e
+        run: npm run test:e2e
+      - name: Logs do Postgres em caso de falha
+        if: failure()
+        run: |
+          mkdir -p ci-logs
+          docker ps -a --filter "ancestor=postgres:16-alpine" --format '{{.ID}}' |
+            while read -r id; do docker logs "$id" > "ci-logs/postgres-${id}.log" 2>&1 || true; done
+      - name: Enviar logs (sem segredos)
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: integration-e2e-logs
+          path: ci-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  commitlint:
+    name: Mensagens de commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Validar commits do PR (base..head)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: npx commitlint --from "${BASE_SHA}" --to "${HEAD_SHA}" --verbose
+      - name: Validar commits do push
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          # Branch nova ou push forcado: before e todo zero; valida so o ultimo commit.
+          if [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ] ||
+             ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            npx commitlint --last --verbose
+          else
+            npx commitlint --from "${BEFORE_SHA}" --to "${AFTER_SHA}" --verbose
+          fi
+
+  security:
+    name: Auditoria de dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      # Sem npm ci: o audit le so o package-lock.json.
+      - name: npm audit com lista de aceitos (scripts/audit-gate.js)
+        run: node scripts/audit-gate.js
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsc -p tsconfig.build.json
