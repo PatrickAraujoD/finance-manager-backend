@@ -8,17 +8,33 @@ import { AppModule } from './modules/app.module';
 
 export const JSON_BODY_LIMIT = '100kb';
 
+const CONDITIONAL_HEADERS = [
+  'if-none-match',
+  'if-match',
+  'if-modified-since',
+  'if-unmodified-since',
+  'if-range',
+];
+
 /** Applies every HTTP-level setting (security headers, CORS, limits, pipes, filters). */
 export function configureApp(app: INestApplication, config: AppConfig): void {
   const express = app as NestExpressApplication;
   express.disable('x-powered-by');
   express.set('trust proxy', config.trustProxy);
-  // No ETag (so no 304 either) and no caching: responses carry tokens and personal data.
+  // No ETag and no caching: responses carry tokens and personal data. Conditional request headers
+  // are dropped too: with no ETag, `If-None-Match: *` would still make Express answer 304.
   express.set('etag', false);
-  express.use((_req: unknown, res: { setHeader(n: string, v: string): void }, next: () => void) => {
-    res.setHeader('Cache-Control', 'no-store');
-    next();
-  });
+  express.use(
+    (
+      req: { headers: Record<string, unknown> },
+      res: { setHeader(n: string, v: string): void },
+      next: () => void,
+    ) => {
+      for (const header of CONDITIONAL_HEADERS) delete req.headers[header];
+      res.setHeader('Cache-Control', 'no-store');
+      next();
+    },
+  );
   express.useBodyParser('json', { limit: JSON_BODY_LIMIT });
   express.useBodyParser('urlencoded', { limit: JSON_BODY_LIMIT, extended: false });
   express.use(helmet());
