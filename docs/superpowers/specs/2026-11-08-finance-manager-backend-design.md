@@ -16,14 +16,14 @@ O usuário quer um back-end de gestão financeira pessoal. Cada pessoa informa o
 
 ## Princípio: biblioteca antes de algoritmo próprio (pedido do usuário)
 Sempre que houver biblioteca madura para a funcionalidade, usá-la em vez de escrever o algoritmo. Sempre atrás de uma porta, para manter o desacoplamento. Mapa:
-- Dinheiro: `dinero.js` (v2) dentro do value object `Money`, em vez de aritmética própria.
+- Dinheiro: `Money` próprio sobre inteiro em centavos (soma, subtração e comparação inteiras, validando `Number.isSafeInteger`), sem dependência. Decisão do usuário após revisão: `dinero.js` v2 é ESM-only.
 - Datas/meses: `date-fns`.
 - IDs: `uuid` (v7) ou `ulid`.
 - Senha: `argon2`. JWT: `@nestjs/jwt` + `passport-jwt` (adaptador). Rate limit: `@nestjs/throttler`. Headers: `helmet`.
 - Validação: `class-validator` + `class-transformer` nos DTOs; config/env com `@nestjs/config` + `zod`.
 - Upload: `multer` (via Nest) + `file-type` para checar magic bytes.
 - PDF com texto: `pdf-parse`. OCR: `tesseract.js` (idioma `por`).
-- Valor monetário BRL no texto extraído: procurar primeiro uma lib de parsing de moeda/números localizados (ex.: `currency.js`, `numbro`); só escrever regex fina para localizar "Valor/Total" no texto se nenhuma lib resolver.
+- Valor monetário BRL no texto extraído: procurar primeiro uma lib de parsing de moeda/números localizados (`numbro` foi descartado junto com o `dinero.js`; `Money.parseBRL` usa regex estrita pt-BR); só escrever regex fina para localizar "Valor/Total" no texto se nenhuma lib resolver.
 - Agregações dos gráficos: `GROUP BY` do Postgres via Prisma (`groupBy`/`$queryRaw`), sem somar em memória.
 - Testes: `jest`, `supertest`, `@testcontainers/postgresql` (ou o Postgres do Docker Compose).
 - Fronteiras de camada: `eslint-plugin-boundaries`.
@@ -31,7 +31,7 @@ Sempre que houver biblioteca madura para a funcionalidade, usá-la em vez de esc
 
 ## Minhas decisões (sinalizadas, podem ser revistas)
 - TypeScript, Jest, npm (pnpm não está instalado), Prisma como ORM (só na camada de infraestrutura), Docker Compose para o Postgres.
-- Dinheiro como **inteiro em centavos** (`Money` value object sobre `dinero.js`), nunca float.
+- Dinheiro como **inteiro em centavos** (`Money` value object próprio sobre inteiro em centavos), nunca float.
 - Extração de PDF com `pdf-parse`; OCR com `tesseract.js` (sem dependência de sistema; `tesseract` não está instalado na máquina). Ambos atrás da porta `ReceiptExtractor`.
 - Admin **não** enxerga gastos/salário de outros usuários (privacidade). Só gerencia contas e categorias globais.
 - Gráficos extras (palpite): comparação gasto vs. salário do mês.

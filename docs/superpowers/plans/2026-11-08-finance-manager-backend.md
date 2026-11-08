@@ -6,7 +6,7 @@
 
 **Architecture:** Arquitetura Limpa em quatro camadas (`domain` ← `application` ← `infrastructure` / `presentation`). Casos de uso são classes TypeScript puras que recebem portas (interfaces) pelo construtor; NestJS só faz a fiação e expõe HTTP. Dinheiro sempre em centavos inteiros.
 
-**Tech Stack:** TypeScript, NestJS (apenas `presentation`), PostgreSQL + Prisma (apenas `infrastructure`), Jest + supertest, argon2, `@nestjs/jwt` + `passport-jwt`, `@nestjs/throttler`, helmet, class-validator, zod, dinero.js v2, date-fns, uuid, multer + file-type, pdf-parse, tesseract.js, eslint-plugin-boundaries, Docker Compose, npm.
+**Tech Stack:** TypeScript, NestJS (apenas `presentation`), PostgreSQL + Prisma (apenas `infrastructure`), Jest + supertest, argon2, `@nestjs/jwt` + `passport-jwt`, `@nestjs/throttler`, helmet, class-validator, zod, date-fns, uuid, multer + file-type, pdf-parse, tesseract.js, eslint-plugin-boundaries, Docker Compose, npm.
 
 **Spec:** `docs/superpowers/specs/2026-11-08-finance-manager-backend-design.md`
 
@@ -15,7 +15,7 @@
 - TDD estrito: teste vermelho (rodado e visto falhar) → código mínimo → verde → commit.
 - `src/domain` e `src/application` NÃO importam `@nestjs/*`, `@prisma/client` nem libs de infra (argon2, jwt, tesseract, pdf-parse...). Violação quebra o lint.
 - Biblioteca madura antes de algoritmo próprio; sempre atrás de uma porta.
-- Dinheiro = inteiro em centavos (`Money` sobre dinero.js, moeda BRL). Nunca `number` float em regra de negócio.
+- Dinheiro = inteiro em centavos (`Money` próprio sobre inteiro em centavos, sem dependência; decisão do usuário após revisão: dinero.js é ESM-only). Nunca `number` float em regra de negócio.
 - Papéis: `'A'` (admin) e `'N'` (normal). Admin NÃO lê gastos/salário de outros usuários.
 - Autorização (dono do recurso / papel) é feita nos casos de uso, não só em guards.
 - Upload: máx. 5 MB; tipos PDF/PNG/JPEG validados por magic bytes; nome de arquivo aleatório.
@@ -108,7 +108,7 @@ prisma/schema.prisma   docker-compose.yml   .env.example   eslint.config.mjs
   - Erros: `DomainError` base e `ValidationError`, `NotFoundError`, `ForbiddenError`, `ConflictError`, `UnauthorizedError`.
 
 - [ ] **Step 1:** Testes de `Money`: `fromCents(1050).cents === 1050`; `fromCents(1.5)` lança; `add`/`subtract` corretos; `parseBRL('R$ 1.234,56').cents === 123456`; `parseBRL('1234,56')`, `parseBRL('R$1.234,56')` idem; `parseBRL('abc')` → `null`. Ver falhar.
-- [ ] **Step 2:** Implementar `Money` sobre dinero.js (BRL, 2 casas); `parseBRL` usa lib de parsing numérico localizado (ex.: `numbro` pt-BR) — não escrever parser próprio.
+- [ ] **Step 2:** Implementar `Money` próprio sobre inteiro em centavos (add/subtract validam `Number.isSafeInteger`, sem `-0`); `parseBRL` com regex estrita pt-BR. Sem dinero.js/numbro (decisão do usuário após revisão: dinero.js é ESM-only).
 - [ ] **Step 3:** Testes e implementação de `Email` (`A@X.com` → `a@x.com`; inválido lança `ValidationError`) e `Role`.
 - [ ] **Step 4:** `npm test` verde; commit `feat(domain): money, email, role`.
 
