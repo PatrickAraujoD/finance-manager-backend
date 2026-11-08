@@ -50,6 +50,13 @@ describe('Expense', () => {
     ).toThrow(ValidationError);
   });
 
+  it('has no createdAt until it is persisted, and carries the stored one', () => {
+    expect(Expense.create(expenseProps).createdAt).toBeNull();
+    const at = new Date('2026-11-02T10:00:00Z');
+    expect(Expense.create({ ...expenseProps, createdAt: at }).createdAt).toEqual(at);
+    expect(Expense.create({ ...expenseProps, createdAt: at }).createdAt).not.toBe(at);
+  });
+
   it('rejects an invalid spentAt date', () => {
     expect(() => Expense.create({ ...expenseProps, spentAt: new Date('nope') })).toThrow(
       ValidationError,

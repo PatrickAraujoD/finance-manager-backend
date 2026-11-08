@@ -77,6 +77,15 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     expect(await repo.findById('u1', 'missing')).toBeNull();
   });
 
+  it('fills createdAt on read and keeps it through an update', async () => {
+    await repo.save(expense('e1'));
+    const stored = await repo.findById('u1', 'e1');
+    expect(stored?.createdAt).toBeInstanceOf(Date);
+    expect(Math.abs((stored?.createdAt as Date).getTime() - Date.now())).toBeLessThan(60_000);
+    await repo.update(expense('e1', { cents: 5 }));
+    expect((await repo.findById('u1', 'e1'))?.createdAt).toEqual(stored?.createdAt);
+  });
+
   it('stores spentAt as a plain calendar date', async () => {
     await repo.save(expense('e1', { spentAt: '2026-03-31' }));
     const rows = await prisma.client.$queryRaw<{ d: string }[]>`
