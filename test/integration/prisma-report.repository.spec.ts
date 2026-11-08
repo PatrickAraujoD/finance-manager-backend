@@ -318,7 +318,7 @@ describe('PrismaReportRepository (Postgres)', () => {
         // Tiny tables favour a sequential scan; disable it to prove the index is usable.
         await tx.$executeRawUnsafe('SET LOCAL enable_seqscan = off');
         const rows = await tx.$queryRawUnsafe<Record<string, string>[]>(
-          `EXPLAIN ${sql.sql}`,
+          `EXPLAIN ${sql.text}`,
           ...sql.values,
         );
         return rows.map((r) => Object.values(r)[0]).join('\n');
