@@ -15,6 +15,10 @@ export interface ExpenseProps {
   description?: string;
 }
 
+function toUtcDay(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 export class Expense {
   private constructor(private readonly props: ExpenseProps) {}
 
@@ -27,7 +31,7 @@ export class Expense {
     if (input.description !== undefined && input.description.length > MAX_DESCRIPTION) {
       throw new ValidationError(`Description must have at most ${MAX_DESCRIPTION} characters`);
     }
-    return new Expense({ ...input, spentAt: new Date(input.spentAt.getTime()) });
+    return new Expense({ ...input, spentAt: toUtcDay(input.spentAt) });
   }
 
   get id(): string {
