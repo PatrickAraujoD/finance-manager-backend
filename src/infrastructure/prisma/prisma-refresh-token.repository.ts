@@ -46,8 +46,24 @@ export class PrismaRefreshTokenRepository implements RefreshTokenRepository {
   }
 
   async rotate(oldId: string, replacement: RefreshToken, now: Date): Promise<boolean> {
-    void [oldId, replacement, now];
-    throw new Error('Not implemented');
+    return this.prisma.client.$transaction(async (tx) => {
+      const { count } = await tx.refreshToken.updateMany({
+        where: { id: oldId, revokedAt: null },
+        data: { revokedAt: now },
+      });
+      if (count !== 1) return false;
+      await tx.refreshToken.create({
+        data: {
+          id: replacement.id,
+          userId: replacement.userId,
+          familyId: replacement.familyId,
+          tokenHash: replacement.tokenHash,
+          expiresAt: replacement.expiresAt,
+          revokedAt: replacement.revokedAt,
+        },
+      });
+      return true;
+    });
   }
 
   async revokeFamily(familyId: string): Promise<void> {
