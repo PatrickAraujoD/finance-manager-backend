@@ -198,6 +198,61 @@ describe('FakeRefreshTokenRepository', () => {
   });
 });
 
+describe('FakeRefreshTokenRepository.rotate', () => {
+  const mk = (id: string, hash = `h-${id}`) =>
+    RefreshToken.create({
+      id,
+      userId: 'u1',
+      familyId: 'f1',
+      tokenHash: hash,
+      expiresAt: new Date('2027-01-01T00:00:00Z'),
+    });
+  const now = new Date('2026-11-08T00:00:00Z');
+
+  it('revokes the old token and stores the replacement', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk('1'));
+    expect(await repo.rotate('1', mk('2'), now)).toBe(true);
+    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
+    expect((await repo.findByHash('h-2'))?.revokedAt).toBeNull();
+  });
+
+  it('returns false and stores nothing when the old token is already revoked', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk('1'));
+    await repo.rotate('1', mk('2'), now);
+    expect(await repo.rotate('1', mk('3'), new Date())).toBe(false);
+    expect(await repo.findByHash('h-3')).toBeNull();
+    expect((await repo.findByHash('h-1'))?.revokedAt).toEqual(now);
+  });
+
+  it('returns false for an unknown id', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    expect(await repo.rotate('nope', mk('2'), now)).toBe(false);
+    expect(await repo.findByHash('h-2')).toBeNull();
+  });
+
+  it('lets exactly one of many concurrent rotations win', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk('1'));
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => repo.rotate('1', mk(`n${i}`), now)),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+    let stored = 0;
+    for (let i = 0; i < 5; i++) if (await repo.findByHash(`h-n${i}`)) stored++;
+    expect(stored).toBe(1);
+  });
+
+  it('rolls back when the replacement cannot be stored (duplicate hash)', async () => {
+    const repo = new FakeRefreshTokenRepository();
+    await repo.save(mk('1'));
+    await repo.save(mk('2', 'dup'));
+    await expect(repo.rotate('1', mk('3', 'dup'), now)).rejects.toThrow();
+    expect((await repo.findByHash('h-1'))?.revokedAt).toBeNull();
+  });
+});
+
 describe('FakeRefreshTokenRepository.revokeIfActive', () => {
   const mk = () =>
     RefreshToken.create({

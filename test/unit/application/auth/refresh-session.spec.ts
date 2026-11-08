@@ -50,6 +50,24 @@ describe('RefreshSession', () => {
     expect(fresh?.userId).toBe('u1');
   });
 
+  it('rotates atomically through the repository port', async () => {
+    const { refresh, refreshTokens, session } = await setup();
+    const rotate = jest.spyOn(refreshTokens, 'rotate');
+    const save = jest.spyOn(refreshTokens, 'save');
+    await refresh.execute({ refreshToken: session.refreshToken });
+    expect(rotate).toHaveBeenCalledTimes(1);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('keeps the old token usable when issuing the new session fails', async () => {
+    const { refresh, refreshTokens, tokens, session } = await setup();
+    jest.spyOn(tokens, 'signAccess').mockRejectedValueOnce(new Error('boom'));
+    await expect(refresh.execute({ refreshToken: session.refreshToken })).rejects.toThrow('boom');
+    const old = await refreshTokens.findByHash(tokens.hashRefresh(session.refreshToken));
+    expect(old?.revokedAt).toBeNull();
+    await expect(refresh.execute({ refreshToken: session.refreshToken })).resolves.toBeDefined();
+  });
+
   it('keeps working along the chain of rotated tokens', async () => {
     const { refresh, session } = await setup();
     const second = await refresh.execute({ refreshToken: session.refreshToken });
