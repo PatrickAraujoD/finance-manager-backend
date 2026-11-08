@@ -27,6 +27,7 @@ model User {
   categories    Category[]
   expenses      Expense[]
   incomes       MonthlyIncome[]
+  receipts      Receipt[]
 }
 
 model RefreshToken {
@@ -63,7 +64,6 @@ model Expense {
   id          String   @id
   userId      String
   categoryId  String
-  // Plain column until the Receipt table exists.
   receiptId   String?
   // Integer cents; BigInt so any safe integer fits.
   amountCents BigInt
@@ -74,6 +74,7 @@ model Expense {
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  receipt     Receipt? @relation(fields: [receiptId], references: [id], onDelete: Restrict)
 
   @@index([userId, spentAt])
   @@index([categoryId])
@@ -93,4 +94,22 @@ model MonthlyIncome {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, month])
+}
+
+// Uploaded proof of payment. The file itself lives in the FileStorage under storageKey.
+// Restrict on both sides: a user with receipts, or a receipt used by an expense, cannot be
+// deleted silently. CHECK suggestedAmountCents > 0 lives in the migration SQL.
+model Receipt {
+  id                   String    @id
+  userId               String
+  storageKey           String    @unique
+  mimeType             String
+  sizeBytes            Int
+  // Integer cents; BigInt so any safe integer fits. NULL = nothing reliable was extracted.
+  suggestedAmountCents BigInt?
+  createdAt            DateTime  @default(now())
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  expenses             Expense[]
+
+  @@index([userId])
 }
