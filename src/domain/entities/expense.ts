@@ -1,5 +1,8 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
+import { requireNonBlank } from '../validation';
+
+const MAX_DESCRIPTION = 500;
 
 export interface ExpenseProps {
   id: string;
@@ -16,8 +19,14 @@ export class Expense {
   private constructor(private readonly props: ExpenseProps) {}
 
   static create(input: ExpenseProps): Expense {
+    requireNonBlank(input.id, 'id');
+    requireNonBlank(input.userId, 'userId');
+    requireNonBlank(input.categoryId, 'categoryId');
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (Number.isNaN(input.spentAt.getTime())) throw new ValidationError('Invalid spentAt date');
+    if (input.description !== undefined && input.description.length > MAX_DESCRIPTION) {
+      throw new ValidationError(`Description must have at most ${MAX_DESCRIPTION} characters`);
+    }
     return new Expense({ ...input, spentAt: new Date(input.spentAt.getTime()) });
   }
 

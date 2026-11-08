@@ -1,4 +1,5 @@
 import { ValidationError } from '../errors';
+import { requireNonBlank } from '../validation';
 
 export interface RefreshTokenProps {
   id: string;
@@ -17,6 +18,8 @@ export class RefreshToken {
   private constructor(private readonly props: RefreshTokenProps) {}
 
   static create(input: CreateRefreshTokenInput): RefreshToken {
+    requireNonBlank(input.id, 'id');
+    requireNonBlank(input.userId, 'userId');
     if (!input.tokenHash) throw new ValidationError('tokenHash is required');
     if (Number.isNaN(input.expiresAt.getTime())) throw new ValidationError('Invalid expiresAt');
     return new RefreshToken({

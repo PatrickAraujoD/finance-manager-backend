@@ -1,5 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
+import { requireNonBlank } from '../validation';
 
 export interface ReceiptProps {
   id: string;
@@ -14,6 +15,8 @@ export class Receipt {
   private constructor(private readonly props: ReceiptProps) {}
 
   static create(input: ReceiptProps): Receipt {
+    requireNonBlank(input.id, 'id');
+    requireNonBlank(input.userId, 'userId');
     if (!input.storageKey) throw new ValidationError('storageKey is required');
     if (!input.mimeType) throw new ValidationError('mimeType is required');
     if (!Number.isInteger(input.sizeBytes) || input.sizeBytes <= 0) {

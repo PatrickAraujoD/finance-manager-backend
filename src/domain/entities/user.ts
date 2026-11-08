@@ -1,6 +1,7 @@
 import { Email } from '../email';
 import { ValidationError } from '../errors';
 import { Role } from '../role';
+import { requireNonBlank } from '../validation';
 
 export interface UserProps {
   id: string;
@@ -24,6 +25,7 @@ export class User {
   }
 
   static create(input: CreateUserInput): User {
+    requireNonBlank(input.id, 'id');
     const name = input.name.trim();
     if (!name) throw new ValidationError('User name is required');
     if (!input.passwordHash) throw new ValidationError('Password hash is required');
