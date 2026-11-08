@@ -91,9 +91,14 @@ describe('client aborting a JSON body', () => {
     const socket = await openSocket(port);
     socket.on('error', () => undefined);
     socket.resume();
-    const closed = new Promise<void>((resolve) => socket.once('close', () => resolve()));
+    let giveUp: NodeJS.Timeout | undefined;
+    const closed = new Promise<void>((resolve) => {
+      socket.once('close', () => resolve());
+      giveUp = setTimeout(resolve, 8_000);
+    });
     socket.write(head(1000) + '{"a":');
-    await Promise.race([closed, sleep(8_000)]);
+    await closed;
+    clearTimeout(giveUp);
     socket.destroy();
     await sleep(500);
 

@@ -95,7 +95,7 @@ export class DomainErrorFilter implements ExceptionFilter {
       const status = e.getStatus();
       return { status, payload: body(status) };
     }
-    if (isRequestAborted(e)) {
+    if (isRequestAborted(e) || isBodyAborted(e)) {
       // The client went away mid-upload: not a server fault, so no stack and no ERROR.
       this.logger.warn('Request aborted by the client');
       return { status: 400, payload: body(400) };
@@ -115,12 +115,25 @@ function isRequestAborted(e: unknown): boolean {
   return e instanceof Error && e.message === 'Request aborted';
 }
 
+function bodyErrorType(e: unknown): string | null {
+  if (typeof e !== 'object' || e === null) return null;
+  const { type, status } = e as { type?: unknown; status?: unknown };
+  return typeof type === 'string' && typeof status === 'number' ? type : null;
+}
+
+/** raw-body: the client hung up mid-body (or the server closed a stalled one by timeout). */
+function isBodyAborted(e: unknown): boolean {
+  return bodyErrorType(e) === 'request.aborted';
+}
+
+// Errors body-parser/raw-body raise because of what the client sent; none is a server fault.
+const CLIENT_BODY_ERRORS = new Set([
+  'request.size.invalid',
+  'encoding.unsupported',
+  'charset.unsupported',
+]);
+
 function isBodyParserError(e: unknown): e is { status: number } {
-  return (
-    typeof e === 'object' &&
-    e !== null &&
-    typeof (e as { type?: unknown }).type === 'string' &&
-    (e as { type: string }).type.startsWith('entity.') &&
-    typeof (e as { status?: unknown }).status === 'number'
-  );
+  const type = bodyErrorType(e);
+  return type !== null && (type.startsWith('entity.') || CLIENT_BODY_ERRORS.has(type));
 }
