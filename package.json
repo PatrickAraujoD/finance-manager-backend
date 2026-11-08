@@ -12,7 +12,7 @@
     "start:dev": "ts-node src/main.ts",
     "lint": "eslint .",
     "test": "jest --config jest.config.js test/unit",
-    "test:integration": "jest --config jest.config.js test/integration --passWithNoTests",
+    "test:integration": "jest --config jest.integration.config.js",
     "test:e2e": "jest --config jest.config.js test/e2e",
     "prepare": "husky"
   },
