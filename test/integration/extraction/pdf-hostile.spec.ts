@@ -61,6 +61,36 @@ describe('PdfTextExtractor against hostile PDFs', () => {
     expect(growthMb).toBeLessThan(150);
   });
 
+  describe('when the child memory cannot be measured (no ps, no /proc)', () => {
+    const originalPath = process.env.PATH;
+    beforeEach(() => {
+      process.env.PATH = '/nonexistent';
+    });
+    afterEach(() => {
+      process.env.PATH = originalPath;
+    });
+
+    it('fails closed: the child is killed at once and the Flate bomb stays bounded', async () => {
+      const bomb = await flateBombPdf(1);
+      const sampler = new RssSampler();
+      const started = Date.now();
+      const result = await new PdfTextExtractor().extract(bomb).catch(() => null);
+      sampler.stop();
+      expect(result === null || result.amount === null).toBe(true);
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(sampler.peakGrowthMb()).toBeLessThan(PARENT_GROWTH_LIMIT_MB);
+    });
+
+    it('gives no amount at all, and leaves no orphan child', async () => {
+      const result = await new PdfTextExtractor()
+        .extract(fixture('comprovante-texto.pdf'))
+        .catch(() => null);
+      expect(result === null || result.amount === null).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(leftoverChildren()).toEqual([]);
+    });
+  });
+
   it('leaves no child process behind, even after kills', async () => {
     await new PdfTextExtractor({ timeoutMs: 50 }).extract(fixture('comprovante-texto.pdf')).catch(() => null);
     await new PdfTextExtractor().extract(await flateBombPdf(1)).catch(() => null);
