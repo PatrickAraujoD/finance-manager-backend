@@ -106,4 +106,65 @@ describe('hostile text input never causes a 500', () => {
       expect(res.status).toBeLessThan(500);
     });
   });
+
+  describe('control characters in text fields', () => {
+    const bad = ['\\u0007', '\\u001b', '\\r', '\\u007f', '\\u0085', '\\u009f', '\\t', '\\n'];
+    const ok = ['\\t', '\\n'];
+    const single = ['\\u0007', '\\u001b', '\\r', '\\u007f', '\\u0085', '\\u009f'];
+
+    it.each(bad)('rejects %s in a user name (400)', async (c) => {
+      const res = await raw(
+        '/auth/register',
+        `{"name":"An${c}a","email":"ana@example.com","password":"${PASSWORD}"}`,
+      );
+      expect(res.status).toBe(400);
+      expect(await t.prisma.client.user.count()).toBe(0);
+    });
+
+    describe('with a session', () => {
+      let token: string;
+      let categoryId: string;
+      beforeEach(async () => {
+        await http()
+          .post('/auth/register')
+          .send({ name: 'Ana', email: 'ana@example.com', password: PASSWORD });
+        const login = await http()
+          .post('/auth/login')
+          .send({ email: 'ana@example.com', password: PASSWORD });
+        token = login.body.accessToken;
+        const cat = await http()
+          .post('/categories')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ name: 'Casa' });
+        categoryId = cat.body.id;
+      });
+      const withAuth = (path: string, json: string) =>
+        http()
+          .post(path)
+          .set('Authorization', `Bearer ${token}`)
+          .set('Content-Type', 'application/json')
+          .send(json);
+
+      it.each(bad)('rejects %s in a category name (400)', async (c) => {
+        const res = await withAuth('/categories', `{"name":"Fo${c}od"}`);
+        expect(res.status).toBe(400);
+      });
+
+      it.each(single)('rejects %s in an expense description (400)', async (c) => {
+        const res = await withAuth(
+          '/expenses',
+          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"spentAt":"2026-11-01","description":"a${c}b"}`,
+        );
+        expect(res.status).toBe(400);
+      });
+
+      it.each(ok)('accepts %s in an expense description', async (c) => {
+        const res = await withAuth(
+          '/expenses',
+          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"spentAt":"2026-11-01","description":"a${c}b"}`,
+        );
+        expect(res.status).toBe(201);
+      });
+    });
+  });
 });

@@ -24,6 +24,73 @@ describe('text validation', () => {
   });
 });
 
+const controls = [
+  ['TAB', '\t'],
+  ['LF', '\n'],
+  ['CR', '\r'],
+  ['ESC', '\u001b'],
+  ['BEL', '\u0007'],
+  ['VT', '\u000b'],
+  ['FF', '\u000c'],
+  ['DEL', '\u007f'],
+  ['C1 NEL', '\u0085'],
+  ['C1 last', '\u009f'],
+];
+
+describe('control characters', () => {
+  it.each(controls)('single-line text rejects %s', (_n, c) => {
+    expect(() => requireCleanText(`a${c}b`, 'name')).toThrow(ValidationError);
+    expect(() => requireNonBlank(`a${c}b`, 'name')).toThrow(ValidationError);
+  });
+
+  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF'))(
+    'multiline text still rejects %s',
+    (_n, c) => {
+      expect(() => requireCleanText(`a${c}b`, 'f', { multiline: true })).toThrow(ValidationError);
+    },
+  );
+
+  it('multiline text accepts TAB and LF', () => {
+    expect(() => requireCleanText('a\tb\nc', 'f', { multiline: true })).not.toThrow();
+  });
+
+  it('keeps accepting non-control characters next to the C1 range', () => {
+    expect(() => requireCleanText('\u00a0 \u00a1 \u2028x', 'f')).not.toThrow();
+  });
+
+  it.each(controls)('names reject %s (user, category)', (_n, c) => {
+    expect(() =>
+      User.create({
+        id: 'u1',
+        name: `An${c}a`,
+        email: Email.create('a@x.com'),
+        passwordHash: 'hash',
+        role: 'N',
+      }),
+    ).toThrow(ValidationError);
+    expect(() => Category.create({ id: 'c1', name: `Fo${c}od`, ownerId: null })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF'))(
+    'an expense description rejects %s but accepts TAB and LF',
+    (_n, c) => {
+      const base = {
+        id: 'e1',
+        userId: 'u1',
+        categoryId: 'c1',
+        receiptId: null,
+        amount: Money.fromCents(100),
+        paidAlone: true,
+        spentAt: new Date('2026-11-01T00:00:00Z'),
+      };
+      expect(() => Expense.create({ ...base, description: `a${c}b` })).toThrow(ValidationError);
+      expect(() => Expense.create({ ...base, description: 'a\tb\nc' })).not.toThrow();
+    },
+  );
+});
+
 describe('entities reject NUL and lone surrogates in every text field', () => {
   const receipt = {
     id: 'r1',
