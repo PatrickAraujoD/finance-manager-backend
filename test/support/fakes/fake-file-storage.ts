@@ -5,6 +5,10 @@ export class FakeFileStorage implements FileStorage {
   private readonly files = new Map<string, Buffer>();
   private counter = 0;
 
+  get keys(): string[] {
+    return [...this.files.keys()];
+  }
+
   async save(buffer: Buffer, ext: string): Promise<string> {
     if (!/^[a-z0-9]{1,5}$/.test(ext)) throw new ValidationError('Invalid file extension');
     const key = `file-${++this.counter}.${ext}`;
