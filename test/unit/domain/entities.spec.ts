@@ -220,3 +220,44 @@ describe('RefreshToken', () => {
     expect(t.revokedAt).toBeNull();
   });
 });
+
+describe('Date immutability', () => {
+  it('Expense.spentAt is protected from outside mutation', () => {
+    const input = new Date('2026-11-01T00:00:00Z');
+    const e = Expense.create({ ...expenseProps, spentAt: input });
+    input.setUTCFullYear(2000);
+    e.spentAt.setUTCFullYear(1999);
+    expect(e.spentAt).toEqual(new Date('2026-11-01T00:00:00Z'));
+  });
+
+  it('User.lockedUntil is protected from outside mutation', () => {
+    const input = new Date('2026-11-08T10:15:00Z');
+    const u = User.create({ ...userProps, lockedUntil: input });
+    input.setUTCFullYear(2000);
+    u.lockedUntil?.setUTCFullYear(1999);
+    expect(u.lockedUntil).toEqual(new Date('2026-11-08T10:15:00Z'));
+  });
+
+  it('RefreshToken dates are protected from outside mutation', () => {
+    const expiresAt = new Date('2026-12-01T00:00:00Z');
+    const revokedAt = new Date('2026-11-08T00:00:00Z');
+    const t = RefreshToken.create({
+      id: 't1',
+      userId: 'u1',
+      familyId: 'f1',
+      tokenHash: 'h',
+      expiresAt,
+      revokedAt,
+    });
+    expiresAt.setUTCFullYear(2000);
+    revokedAt.setUTCFullYear(2000);
+    t.expiresAt.setUTCFullYear(1999);
+    t.revokedAt?.setUTCFullYear(1999);
+    expect(t.expiresAt).toEqual(new Date('2026-12-01T00:00:00Z'));
+    expect(t.revokedAt).toEqual(new Date('2026-11-08T00:00:00Z'));
+    const now = new Date('2026-11-09T00:00:00Z');
+    const r = t.revoke(now);
+    now.setUTCFullYear(2000);
+    expect(r.revokedAt).toEqual(new Date('2026-11-09T00:00:00Z'));
+  });
+});
