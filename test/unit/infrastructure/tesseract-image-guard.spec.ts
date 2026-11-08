@@ -1,5 +1,9 @@
 import imageSize from 'image-size';
-import { TesseractImageExtractor } from '../../../src/infrastructure/extraction/tesseract-image-extractor';
+import {
+  MAX_IMAGE_PIXELS,
+  OCR_TIMEOUT_MS,
+  TesseractImageExtractor,
+} from '../../../src/infrastructure/extraction/tesseract-image-extractor';
 
 jest.mock('image-size', () => jest.fn(() => ({ width: 10, height: 10 })));
 
@@ -17,5 +21,10 @@ describe('TesseractImageExtractor guards', () => {
       expect((await extractor.extract(buffer)).amount).toBeNull();
     }
     expect(imageSize).not.toHaveBeenCalled();
+  });
+
+  it('uses tight, documented limits: 10 s of OCR and 12 megapixels', () => {
+    expect(OCR_TIMEOUT_MS).toBe(10_000);
+    expect(MAX_IMAGE_PIXELS).toBe(12_000_000);
   });
 });
