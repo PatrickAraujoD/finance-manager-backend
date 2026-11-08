@@ -18,6 +18,7 @@ function toDomain(row: UserRow): User {
     active: row.active,
     failedLogins: row.failedLogins,
     lockedUntil: row.lockedUntil,
+    createdAt: row.createdAt,
   });
 }
 

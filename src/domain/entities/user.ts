@@ -12,10 +12,12 @@ export interface UserProps {
   active: boolean;
   failedLogins: number;
   lockedUntil: Date | null;
+  /** Set by the persistence layer; null until the user has been stored. */
+  createdAt: Date | null;
 }
 
 export type CreateUserInput = Pick<UserProps, 'id' | 'name' | 'email' | 'passwordHash' | 'role'> &
-  Partial<Pick<UserProps, 'active' | 'failedLogins' | 'lockedUntil'>>;
+  Partial<Pick<UserProps, 'active' | 'failedLogins' | 'lockedUntil' | 'createdAt'>>;
 
 export class User {
   readonly #props: UserProps;
@@ -43,6 +45,7 @@ export class User {
       active: input.active ?? true,
       failedLogins,
       lockedUntil: input.lockedUntil ? new Date(input.lockedUntil.getTime()) : null,
+      createdAt: input.createdAt ? new Date(input.createdAt.getTime()) : null,
     });
   }
 
@@ -69,6 +72,10 @@ export class User {
   }
   get lockedUntil(): Date | null {
     return this.#props.lockedUntil ? new Date(this.#props.lockedUntil.getTime()) : null;
+  }
+
+  get createdAt(): Date | null {
+    return this.#props.createdAt ? new Date(this.#props.createdAt.getTime()) : null;
   }
 
   registerFailedLogin(now: Date, maxAttempts: number, lockMinutes: number): User {
