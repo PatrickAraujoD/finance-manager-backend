@@ -1,5 +1,5 @@
 import { ValidationError } from '../errors';
-import { requireNonBlank } from '../validation';
+import { requireCleanText, requireNonBlank } from '../validation';
 
 export interface RefreshTokenProps {
   id: string;
@@ -20,7 +20,9 @@ export class RefreshToken {
   static create(input: CreateRefreshTokenInput): RefreshToken {
     requireNonBlank(input.id, 'id');
     requireNonBlank(input.userId, 'userId');
+    requireCleanText(input.familyId, 'familyId');
     if (!input.tokenHash) throw new ValidationError('tokenHash is required');
+    requireCleanText(input.tokenHash, 'tokenHash');
     if (Number.isNaN(input.expiresAt.getTime())) throw new ValidationError('Invalid expiresAt');
     return new RefreshToken({
       ...input,

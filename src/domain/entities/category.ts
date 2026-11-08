@@ -1,4 +1,3 @@
-import { ValidationError } from '../errors';
 import { requireNonBlank } from '../validation';
 
 export interface CategoryProps {
@@ -12,8 +11,9 @@ export class Category {
 
   static create(input: CategoryProps): Category {
     requireNonBlank(input.id, 'id');
+    requireNonBlank(input.name, 'Category name');
+    if (input.ownerId !== null) requireNonBlank(input.ownerId, 'ownerId');
     const name = input.name.trim();
-    if (!name) throw new ValidationError('Category name is required');
     return new Category({ ...input, name });
   }
 

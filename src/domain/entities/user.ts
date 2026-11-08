@@ -1,7 +1,7 @@
 import { Email } from '../email';
 import { ValidationError } from '../errors';
 import { Role } from '../role';
-import { requireNonBlank } from '../validation';
+import { requireCleanText, requireNonBlank } from '../validation';
 
 export interface UserProps {
   id: string;
@@ -26,9 +26,10 @@ export class User {
 
   static create(input: CreateUserInput): User {
     requireNonBlank(input.id, 'id');
+    requireNonBlank(input.name, 'User name');
     const name = input.name.trim();
-    if (!name) throw new ValidationError('User name is required');
     if (!input.passwordHash) throw new ValidationError('Password hash is required');
+    requireCleanText(input.passwordHash, 'Password hash');
     const failedLogins = input.failedLogins ?? 0;
     if (!Number.isInteger(failedLogins) || failedLogins < 0) {
       throw new ValidationError('failedLogins must be a non-negative integer');

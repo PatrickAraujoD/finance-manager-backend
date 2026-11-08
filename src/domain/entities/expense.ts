@@ -1,6 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
-import { requireNonBlank } from '../validation';
+import { requireCleanText, requireNonBlank } from '../validation';
 
 const MAX_DESCRIPTION = 500;
 
@@ -26,6 +26,8 @@ export class Expense {
     requireNonBlank(input.id, 'id');
     requireNonBlank(input.userId, 'userId');
     requireNonBlank(input.categoryId, 'categoryId');
+    if (input.receiptId !== null) requireNonBlank(input.receiptId, 'receiptId');
+    if (input.description !== undefined) requireCleanText(input.description, 'description');
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (Number.isNaN(input.spentAt.getTime())) throw new ValidationError('Invalid spentAt date');
     if (input.description !== undefined && input.description.length > MAX_DESCRIPTION) {

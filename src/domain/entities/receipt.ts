@@ -1,6 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
-import { requireNonBlank } from '../validation';
+import { requireCleanText, requireNonBlank } from '../validation';
 
 export interface ReceiptProps {
   id: string;
@@ -18,7 +18,9 @@ export class Receipt {
     requireNonBlank(input.id, 'id');
     requireNonBlank(input.userId, 'userId');
     if (!input.storageKey) throw new ValidationError('storageKey is required');
+    requireCleanText(input.storageKey, 'storageKey');
     if (!input.mimeType) throw new ValidationError('mimeType is required');
+    requireCleanText(input.mimeType, 'mimeType');
     if (!Number.isInteger(input.sizeBytes) || input.sizeBytes <= 0) {
       throw new ValidationError('sizeBytes must be a positive integer');
     }
