@@ -1,6 +1,5 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+module.exports = {
   rootDir: '.',
   testEnvironment: 'node',
   transform: { '^.+\\.ts$': ['ts-jest', { diagnostics: { ignoreCodes: [151002] } }] },
@@ -8,5 +7,3 @@ const config: Config = {
   testRegex: '.*\\.(spec|e2e-spec)\\.ts$',
   testTimeout: 30000,
 };
-
-export default config;

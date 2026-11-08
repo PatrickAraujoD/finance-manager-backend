@@ -20,6 +20,7 @@ export default tseslint.config(
   { ignores: ['dist/**', 'node_modules/**', 'coverage/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  { files: ['**/*.js'], languageOptions: { sourceType: 'commonjs', globals: { module: 'writable' } } },
   {
     files: ['src/**/*.ts'],
     plugins: { boundaries },
