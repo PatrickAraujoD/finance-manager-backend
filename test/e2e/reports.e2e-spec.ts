@@ -100,6 +100,38 @@ describe('reports endpoints', () => {
       });
     });
 
+    const OUT_OF_RANGE = ['0050-01', '0000-01', '1899-12', '9999-12'];
+    it.each(OUT_OF_RANGE)('rejects the year range edge %s in the four reports (400)', async (m) => {
+      for (const path of [
+        `by-category?month=${m}`,
+        `by-day?month=${m}`,
+        `income-vs-spent?month=${m}`,
+        `monthly-evolution?from=${m}&to=${m}`,
+        `monthly-evolution?from=2026-01&to=${m}`,
+      ]) {
+        expect((await report(ana, path)).status).toBe(400);
+      }
+    });
+
+    it.each(['1900-01', '9998-12'])('accepts the boundary month %s (200)', async (m) => {
+      for (const path of [
+        `by-category?month=${m}`,
+        `by-day?month=${m}`,
+        `income-vs-spent?month=${m}`,
+        `monthly-evolution?from=${m}&to=${m}`,
+      ]) {
+        expect((await report(ana, path)).status).toBe(200);
+      }
+    });
+
+    it('year 0050 never returns 1949 spending, while 1949-05 does', async () => {
+      await spend(ana, global, 700, '1949-05-05');
+      expect((await report(ana, 'by-category?month=0050-01')).status).toBe(400);
+      const res = await report(ana, 'by-category?month=1949-05');
+      expect(res.status).toBe(200);
+      expect(res.body.totalCents).toBe(700);
+    });
+
     it('accepts exactly 24 months and rejects 25', async () => {
       expect((await report(ana, 'monthly-evolution?from=2025-01&to=2026-12')).status).toBe(200);
       expect((await report(ana, 'monthly-evolution?from=2025-01&to=2027-01')).status).toBe(400);

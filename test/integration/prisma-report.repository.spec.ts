@@ -177,6 +177,47 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
   });
 
+  describe('month window at the edges of the supported years', () => {
+    it('month 0050-01 is year 50, not 1950: a 1949 expense is not included', async () => {
+      await spend('ana', 'c-food', 7, '1949-05-05');
+      expect((await repo.totalSpent('ana', '0050-01')).cents).toBe(0);
+      expect(await repo.totalsByCategory('ana', '0050-01')).toEqual([]);
+      expect(await repo.totalsByDay('ana', '0050-01')).toEqual([]);
+      expect(await repo.totalsByMonth('ana', '0050-01', '0050-01')).toEqual([]);
+      expect((await repo.totalSpent('ana', '1949-05')).cents).toBe(7);
+    });
+
+    it('works at the first and last accepted months (no 500)', async () => {
+      await spend('ana', 'c-food', 3, '1900-01-01');
+      await spend('ana', 'c-food', 4, '9998-12-31');
+      expect((await repo.totalSpent('ana', '1900-01')).cents).toBe(3);
+      expect((await repo.totalSpent('ana', '9998-12')).cents).toBe(4);
+      expect(cents(await repo.totalsByDay('ana', '9998-12'))).toEqual([4]);
+      expect(cents(await repo.totalsByCategory('ana', '1900-01'))).toEqual([3]);
+      expect(cents(await repo.totalsByMonth('ana', '1900-01', '9998-12'))).toEqual([3, 4]);
+    });
+  });
+
+  describe('session time zone', () => {
+    it('gives the same dates and months under a far-east session time zone', async () => {
+      await spend('ana', 'c-food', 1, '2026-03-31');
+      await spend('ana', 'c-food', 2, '2026-04-01');
+      const run = (zone: string) =>
+        prisma.client.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL TIME ZONE '${zone}'`);
+          const days = await tx.$queryRaw<{ date: string }[]>(dayTotalsSql('ana', '2026-04'));
+          const months = await tx.$queryRaw<{ month: string }[]>(
+            monthTotalsSql('ana', '2026-03', '2026-04'),
+          );
+          return [days.map((d) => d.date), months.map((m) => m.month)];
+        });
+      const baseline = await run('UTC');
+      expect(baseline).toEqual([['2026-04-01'], ['2026-03', '2026-04']]);
+      expect(await run('Pacific/Apia')).toEqual(baseline);
+      expect(await run('Pacific/Pago_Pago')).toEqual(baseline);
+    });
+  });
+
   describe('isolation between users', () => {
     beforeEach(async () => {
       await spend('ana', 'c-food', 100, '2026-11-05');

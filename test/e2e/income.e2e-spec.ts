@@ -88,6 +88,16 @@ describe('income endpoints', () => {
       },
     );
 
+    it.each(['0050-01', '0000-01', '1899-12', '9999-12'])('rejects the year range edge %s', async (m) => {
+      expect((await put(ana, m, { amountCents: 100 })).status).toBe(400);
+      expect((await get(ana, m)).status).toBe(400);
+    });
+
+    it.each(['1900-01', '9998-12'])('accepts the boundary month %s', async (m) => {
+      expect((await put(ana, m, { amountCents: 100 })).status).toBe(200);
+      expect((await get(ana, m)).body).toEqual({ month: m, amountCents: 100 });
+    });
+
     it('rejects a month with a trailing space or newline', async () => {
       expect((await put(ana, '2026-11%20', { amountCents: 100 })).status).toBe(400);
       expect((await put(ana, '2026-11%0A', { amountCents: 100 })).status).toBe(400);

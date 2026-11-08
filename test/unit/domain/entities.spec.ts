@@ -257,6 +257,14 @@ describe('MonthlyIncome', () => {
     expect(MonthlyIncome.create({ userId: 'u1', month: '2026-11', amount }).month).toBe('2026-11');
   });
 
+  it.each(['0050-01', '0000-01', '1899-12', '9999-12'])('rejects the out of range month %p', (month) => {
+    expect(() => MonthlyIncome.create({ userId: 'u1', month, amount })).toThrow(ValidationError);
+  });
+
+  it.each(['1900-01', '9998-12'])('accepts the boundary month %p', (month) => {
+    expect(MonthlyIncome.create({ userId: 'u1', month, amount }).month).toBe(month);
+  });
+
   it.each(['2026-13', '2026-00', '26-1', '2026-1', '2026-11-01', '', 'abcd-ef'])(
     'rejects month %p',
     (month) => {
