@@ -37,9 +37,10 @@ describe('ByDay', () => {
     await w.spend('ana', 'c1', 900, '2026-11-01');
     await w.spend('ana', 'c1', 400, '2026-11-02');
     await w.spend('ana', 'c1', 400, '2026-11-02');
+    await w.spend('ana', 'c1', 400, '2026-11-02');
     expect((await byDay.execute(ana, '2026-11')).topDay).toEqual({
       date: '2026-11-02',
-      totalCents: 800,
+      totalCents: 1200,
     });
   });
 
