@@ -23,6 +23,27 @@ const envSchema = z.object({
   KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(5_000),
 });
 
+/** Marker texts of example values; a secret containing any of them was never generated. */
+const PLACEHOLDER_MARKERS = [
+  'troque-por',
+  'change-me',
+  'changeme',
+  'replace-me',
+  'replace-this',
+  'your-secret',
+  'your_secret',
+  'placeholder',
+  'example',
+];
+const MIN_DISTINCT_SECRET_CHARS = 10;
+
+/** True for a copied example value or a trivially repetitive secret. Never logs the value. */
+function isWeakSecret(secret: string): boolean {
+  const lower = secret.toLowerCase();
+  if (PLACEHOLDER_MARKERS.some((marker) => lower.includes(marker))) return true;
+  return new Set(secret).size < MIN_DISTINCT_SECRET_CHARS;
+}
+
 export interface AppConfig {
   databaseUrl: string;
   jwtAccessSecret: string;
@@ -61,6 +82,12 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   const e = parsed.data;
   if (e.HEADERS_TIMEOUT_MS > e.REQUEST_TIMEOUT_MS) {
     throw new Error('Invalid environment configuration: HEADERS_TIMEOUT_MS');
+  }
+  if (isWeakSecret(e.JWT_ACCESS_SECRET)) {
+    throw new Error(
+      'Invalid environment configuration: JWT_ACCESS_SECRET is a placeholder or too simple; ' +
+        'generate one with: openssl rand -base64 48',
+    );
   }
   return {
     databaseUrl: e.DATABASE_URL,
