@@ -16,8 +16,10 @@ export class Category {
     requireNonBlank(input.id, 'id');
     requireNonBlank(input.name, 'Category name');
     if (input.ownerId !== null) requireNonBlank(input.ownerId, 'ownerId');
-    const name = input.name.trim();
-    if (name.length > MAX_CATEGORY_NAME) {
+    // Stored form: NFC, inner whitespace runs collapsed to one space, trimmed. The limit counts
+    // code points (not UTF-16 units) so emoji are not penalized.
+    const name = input.name.normalize('NFC').replace(/\s+/g, ' ').trim();
+    if (Array.from(name).length > MAX_CATEGORY_NAME) {
       throw new ValidationError(`Category name must have at most ${MAX_CATEGORY_NAME} characters`);
     }
     return new Category({ ...input, name });
