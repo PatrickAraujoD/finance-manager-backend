@@ -2,7 +2,7 @@ import { loadConfig } from '../../src/presentation/http/config';
 
 const valid = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
-  JWT_ACCESS_SECRET: 'a'.repeat(32),
+  JWT_ACCESS_SECRET: 'q7Lw3Zr9Kx0TnVb5Hd2Jf8Gs4Mc1Yp6Aw7Eu3Rt9Ni5Ob2Xk',
   UPLOAD_DIR: './uploads',
 };
 
@@ -134,5 +134,38 @@ describe('loadConfig server timeouts', () => {
     expect(() =>
       loadConfig({ ...valid, REQUEST_TIMEOUT_MS: '5000', HEADERS_TIMEOUT_MS: '6000' }),
     ).toThrow('HEADERS_TIMEOUT_MS');
+  });
+
+  describe('JWT_ACCESS_SECRET quality', () => {
+    const secret = (value: string) => ({ ...valid, JWT_ACCESS_SECRET: value });
+
+    it.each([
+      'troque-por-um-segredo-gerado-com-openssl-rand-base64-48',
+      'TROQUE-POR-um-segredo-gerado-com-openssl-rand-base64-48',
+      'please-change-me-before-going-to-production-1234',
+      'your_secret_goes_here_replace_this_value_now_please',
+      'a'.repeat(48),
+      'abababababababababababababababababababab',
+      '0123456789'.repeat(5).slice(0, 9).repeat(6),
+      'q7Lw3Zr9Kx0TnVb5Hd2Jf8Gs4Mc1Yp6',
+    ])('refuses the weak or placeholder secret %p', (value) => {
+      expect(() => loadConfig(secret(value))).toThrow(/JWT_ACCESS_SECRET/);
+    });
+
+    it('never prints the secret in the error', () => {
+      const weak = 'troque-por-um-segredo-gerado-com-openssl-rand-base64-48';
+      expect.assertions(2);
+      try {
+        loadConfig(secret(weak));
+      } catch (e) {
+        expect((e as Error).message).not.toContain(weak);
+        expect((e as Error).message).toMatch(/JWT_ACCESS_SECRET/);
+      }
+    });
+
+    it('accepts a generated base64 secret', () => {
+      const generated = 'k3Jx9/Qm2vWb+7YtLd0RzPn5HcA8sUeXg1FoIyN4TaB6VqKw2ZrMj';
+      expect(loadConfig(secret(generated)).jwtAccessSecret).toBe(generated);
+    });
   });
 });
