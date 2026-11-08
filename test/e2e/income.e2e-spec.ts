@@ -101,7 +101,7 @@ describe('income endpoints', () => {
       ['a negative amount', { amountCents: -100 }],
       ['a zero amount', { amountCents: 0 }],
       ['a gigantic amount', { amountCents: 100_000_000_001 }],
-      ['an unsafe integer', { amountCents: 9007199254740993 }],
+      ['an unsafe integer', { amountCents: Number.MAX_SAFE_INTEGER + 1 }],
       ['a null amount', { amountCents: null }],
       ['a boolean amount', { amountCents: true }],
       ['an array amount', { amountCents: [100] }],
