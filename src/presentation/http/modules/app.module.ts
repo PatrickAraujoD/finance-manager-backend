@@ -17,6 +17,7 @@ import { TOKEN_SERVICE } from '../tokens';
 import { AuthModule } from './auth.module';
 import { CategoriesModule } from './categories.module';
 import { CoreModule } from './core.module';
+import { ExpensesModule } from './expenses.module';
 import { IncomeModule } from './income.module';
 import { ReceiptsModule } from './receipts.module';
 import { UsersModule } from './users.module';
@@ -32,6 +33,7 @@ export class AppModule {
         AuthModule,
         UsersModule,
         CategoriesModule,
+        ExpensesModule,
         IncomeModule,
         ReceiptsModule,
         ThrottlerModule.forRootAsync({

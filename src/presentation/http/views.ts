@@ -1,4 +1,6 @@
+import { formatCalendarDate } from '../../domain/calendar-date';
 import { Category } from '../../domain/entities/category';
+import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
 import { Role } from '../../domain/role';
 
@@ -31,4 +33,30 @@ export interface CategoryView {
 
 export function toCategoryView(category: Category): CategoryView {
   return { id: category.id, name: category.name, global: category.isGlobal() };
+}
+
+export interface ExpenseView {
+  id: string;
+  categoryId: string;
+  receiptId: string | null;
+  amountCents: number;
+  paidAlone: boolean;
+  /** Calendar date, `YYYY-MM-DD`. */
+  spentAt: string;
+  description: string | null;
+  createdAt: Date | null;
+}
+
+/** Explicit field list: `userId` and anything added to Expense later never reach a response. */
+export function toExpenseView(expense: Expense): ExpenseView {
+  return {
+    id: expense.id,
+    categoryId: expense.categoryId,
+    receiptId: expense.receiptId,
+    amountCents: expense.amount.cents,
+    paidAlone: expense.paidAlone,
+    spentAt: formatCalendarDate(expense.spentAt),
+    description: expense.description ?? null,
+    createdAt: expense.createdAt,
+  };
 }
