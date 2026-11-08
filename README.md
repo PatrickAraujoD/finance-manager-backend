@@ -48,6 +48,53 @@ outros; gasto alheio e um 404 identico ao inexistente).
 - Resposta de um gasto: `id, categoryId, receiptId, amountCents, paidAlone, spentAt, description,
   createdAt`. Excluir uma categoria usada por gastos responde 409 e nao apaga nada.
 
+## Relatorios
+
+Quatro rotas `GET`, todas privadas (token obrigatorio, throttle global) e escopadas ao proprio
+usuario: nao ha id de usuario na requisicao e o admin so ve os proprios dados. A query e estrita:
+mes ausente, formato diferente de `YYYY-MM`, parametro repetido ou desconhecido -> 400. Valores em
+centavos sao inteiros JSON. Os meses/dias seguem o calendario UTC (`spentAt` e uma data).
+
+- `GET /reports/by-category?month=2026-11` ("para onde vai o dinheiro"): categorias ordenadas por
+  total decrescente (desempate por nome e id). `percentage` tem 2 casas e a soma e exatamente 100
+  (metodo do maior resto, em inteiros). Mes sem gastos: `items: []`, `totalCents: 0`.
+
+  ```json
+  {"month":"2026-11","totalCents":300,"items":[
+    {"categoryId":"…","categoryName":"Alimentacao","totalCents":200,"percentage":66.67},
+    {"categoryId":"…","categoryName":"Casa","totalCents":100,"percentage":33.33}]}
+  ```
+
+- `GET /reports/by-day?month=2026-11` ("qual dia gastou mais"): so dias com gasto, por data
+  crescente; `topDay` e o dia de maior total (empate: data mais antiga). Mes vazio: `days: []`,
+  `topDay: null`.
+
+  ```json
+  {"month":"2026-11","days":[{"date":"2026-11-02","totalCents":200},
+    {"date":"2026-11-10","totalCents":450}],"topDay":{"date":"2026-11-10","totalCents":450}}
+  ```
+
+- `GET /reports/monthly-evolution?from=2025-11&to=2026-02`: todos os meses do intervalo, com 0 nos
+  meses sem gasto. `from <= to` e no maximo 24 meses (senao 400).
+
+  ```json
+  {"from":"2025-11","to":"2026-02","months":[{"month":"2025-11","totalCents":10},
+    {"month":"2025-12","totalCents":0},{"month":"2026-01","totalCents":40},
+    {"month":"2026-02","totalCents":0}]}
+  ```
+
+- `GET /reports/income-vs-spent?month=2026-11`: sem salario cadastrado, `incomeCents`,
+  `remainingCents` e `percentSpent` sao `null`; `remainingCents` pode ser negativo e
+  `percentSpent` pode passar de 100 (2 casas, calculado com inteiros).
+
+  ```json
+  {"month":"2026-11","incomeCents":500000,"spentCents":125000,"remainingCents":375000,
+   "percentSpent":25}
+  ```
+
+Os totais vem de `GROUP BY` no Postgres (uma consulta por relatorio, usando o indice
+`(userId, spentAt)`); uma soma fora do inteiro seguro vira erro 500, nunca um numero arredondado.
+
 ## Primeiro admin
 
 Registro publico sempre cria usuarios normais. O primeiro admin vem do seed, que le
