@@ -5,3 +5,4 @@ export const PASSWORD_HASHER = Symbol('PASSWORD_HASHER');
 export const TOKEN_SERVICE = Symbol('TOKEN_SERVICE');
 export const CLOCK = Symbol('CLOCK');
 export const ID_GENERATOR = Symbol('ID_GENERATOR');
+export const CATEGORY_REPOSITORY = Symbol('CATEGORY_REPOSITORY');

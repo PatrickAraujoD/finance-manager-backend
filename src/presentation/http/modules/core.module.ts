@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Clock } from '../../../application/ports/clock';
 import { IdGenerator } from '../../../application/ports/id-generator';
 import { Argon2Hasher } from '../../../infrastructure/hashing/argon2-hasher';
+import { PrismaCategoryRepository } from '../../../infrastructure/prisma/prisma-category.repository';
 import { PrismaRefreshTokenRepository } from '../../../infrastructure/prisma/prisma-refresh-token.repository';
 import { PrismaUserRepository } from '../../../infrastructure/prisma/prisma-user.repository';
 import { JwtTokenService } from '../../../infrastructure/tokens/jwt-token-service';
@@ -10,6 +11,7 @@ import { AppConfig } from '../config';
 import { NestPrismaService } from '../nest-prisma.service';
 import {
   APP_CONFIG,
+  CATEGORY_REPOSITORY,
   CLOCK,
   ID_GENERATOR,
   PASSWORD_HASHER,
@@ -45,6 +47,11 @@ export class CoreModule {
           useFactory: (prisma: NestPrismaService) => new PrismaUserRepository(prisma),
         },
         {
+          provide: CATEGORY_REPOSITORY,
+          inject: [NestPrismaService],
+          useFactory: (prisma: NestPrismaService) => new PrismaCategoryRepository(prisma),
+        },
+        {
           provide: REFRESH_TOKEN_REPOSITORY,
           inject: [NestPrismaService],
           useFactory: (prisma: NestPrismaService) => new PrismaRefreshTokenRepository(prisma),
@@ -57,6 +64,7 @@ export class CoreModule {
         PASSWORD_HASHER,
         TOKEN_SERVICE,
         USER_REPOSITORY,
+        CATEGORY_REPOSITORY,
         REFRESH_TOKEN_REPOSITORY,
       ],
     };

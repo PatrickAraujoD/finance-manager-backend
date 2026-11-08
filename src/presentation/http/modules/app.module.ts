@@ -11,7 +11,9 @@ import {
 } from '../decorators/strict-throttle.decorator';
 import { loginThrottleKey } from '../login-throttle-key';
 import { AuthModule } from './auth.module';
+import { CategoriesModule } from './categories.module';
 import { CoreModule } from './core.module';
+import { UsersModule } from './users.module';
 
 @Module({})
 export class AppModule {
@@ -22,6 +24,8 @@ export class AppModule {
       imports: [
         CoreModule.register(config),
         AuthModule,
+        UsersModule,
+        CategoriesModule,
         ThrottlerModule.forRoot({
           throttlers: [
             { name: 'default', ttl, limit: config.throttleLimit },
