@@ -25,13 +25,30 @@ Arquitetura Limpa em quatro camadas; as setas mostram quem pode importar quem (o
 ## Como rodar
 
 ```
-cp .env.example .env            # edite JWT_ACCESS_SECRET (openssl rand -base64 48) e o admin
+cp .env.example .env            # preencha JWT_ACCESS_SECRET (openssl rand -base64 48) e o admin
 docker compose up -d            # Postgres 16 em localhost:5432 (finance/finance)
 npm ci
 npx prisma migrate deploy       # aplica as migrations (use `npx prisma migrate dev` ao evoluir o schema)
-ADMIN_EMAIL=... ADMIN_PASSWORD='...' npm run seed   # primeiro admin (ver "Primeiro admin")
+npm run seed                    # primeiro admin, de ADMIN_EMAIL/ADMIN_PASSWORD do .env (ver "Primeiro admin")
 npm run start:dev               # API em http://localhost:3000 (ou `npm run build && npm start`)
 ```
+
+Requer Node >= 22.9 (`engines`). `npm start`, `npm run start:dev`, `npm run start:prod` e
+`npm run seed` carregam o `.env` com o suporte nativo do Node (`node --env-file-if-exists=.env`):
+se o arquivo nao existir, nada quebra (o Node so avisa) e a validacao de configuracao diz o que
+falta. **Variaveis ja definidas no ambiente nunca sao sobrescritas pelo `.env`** (o ambiente
+vence; ha um teste de integracao para isso). A imagem Docker nao usa `.env`: o `CMD` e
+`node dist/main.js` e a configuracao vem das variaveis do container. Para outros comandos
+(por exemplo `npx prisma ...`, que ja le o `.env` sozinho, ou um script seu), exporte o arquivo no
+shell:
+
+```
+set -a; . ./.env; set +a
+```
+
+O `JWT_ACCESS_SECRET` nao tem valor padrao: a API recusa subir com um valor de exemplo (que
+contenha `troque-por`, `change-me`, `placeholder`...), menor que 32 caracteres ou com menos de 10
+caracteres distintos. A mensagem de erro nunca imprime o segredo.
 
 Testes (precisam do Postgres do compose; usam um banco `*_test` separado, criado e migrado
 sozinho; `TEST_DATABASE_URL` troca o banco, e o nome TEM de terminar em `_test`):
@@ -116,7 +133,8 @@ primeiro admin vem do seed (ver "Primeiro admin").
 - Corpo: `name` (1 a 100 caracteres), `email` (valido, ate 254), `password` (12 a 128 caracteres).
 - Resposta: `201 {"id": "<uuid>"}`.
 - Erros: `400` dados invalidos ou campo extra (como `role`); `409` e-mail ja cadastrado (maiusculas
-  e minusculas contam como o mesmo e-mail); `429` muitas tentativas.
+  e minusculas, NFC/NFD, formas de largura total e dominio IDN/punycode contam como o mesmo
+  e-mail); `429` muitas tentativas.
 
 **`POST /auth/login`** (publico). Autentica e devolve os dois tokens.
 - Corpo: `email`, `password`.
@@ -325,7 +343,7 @@ Resumo (valores e exemplos em `.env.example`; detalhes na secao Configuracao):
 | Variavel | Obrigatoria | Para que serve |
 |---|---|---|
 | `DATABASE_URL` | sim | Postgres da aplicacao |
-| `JWT_ACCESS_SECRET` | sim | Segredo do access token (min. 32 caracteres) |
+| `JWT_ACCESS_SECRET` | sim | Segredo do access token (min. 32 caracteres, >= 10 distintos, sem placeholder) |
 | `UPLOAD_DIR` | sim | Diretorio privado dos comprovantes (0700) |
 | `PORT` | nao | Porta HTTP (3000) |
 | `CORS_ORIGINS` | nao | Origens permitidas, separadas por virgula; vazio desliga CORS |
@@ -337,7 +355,7 @@ Resumo (valores e exemplos em `.env.example`; detalhes na secao Configuracao):
 
 ## Configuracao
 
-Copie `.env.example` para `.env`. Variaveis obrigatorias: `DATABASE_URL`, `JWT_ACCESS_SECRET`
+Copie `.env.example` para `.env` (lido pelos scripts npm; ver "Como rodar"). Variaveis obrigatorias: `DATABASE_URL`, `JWT_ACCESS_SECRET`
 (min. 32 caracteres), `UPLOAD_DIR`. Opcionais: `PORT`, `CORS_ORIGINS`
 (origens separadas por virgula; vazio desliga CORS), `TRUST_PROXY` (`false`, o padrao, ou um
 inteiro >= 1; `true` e `0` sao recusados na subida. Atras de proxy reverso use o numero exato de
@@ -359,7 +377,7 @@ Registro publico sempre cria usuarios normais. O primeiro admin vem do seed, que
 registro) e `DATABASE_URL`:
 
 ```
-ADMIN_EMAIL=voce@exemplo.com ADMIN_PASSWORD='...' npm run seed
+ADMIN_EMAIL=voce@exemplo.com ADMIN_PASSWORD='...' npm run seed   # ou preencha-os no .env
 ```
 
 O seed e idempotente: se ja existir uma conta com esse e-mail, nada e alterado (a senha de um
@@ -384,10 +402,35 @@ na hora e o comprovante fica sem valor sugerido (falha fechada), nunca sem limit
 
 Campos de texto rejeitam (400) as categorias Unicode `Cc` (controles), `Cf` (invisiveis e
 bidirecionais, como U+200B e U+202E), `Zl` e `Zp` (U+2028/2029) e surrogates soltos. Excecoes por
-campo: nomes (usuario, categoria) e descricao aceitam U+200D (emojis compostos) e espacos Unicode
-visiveis; a descricao ainda aceita TAB e LF; o e-mail nao aceita nenhum espaco Unicode nem excecao;
-a senha de cadastro so recusa controles C0/C1/DEL, NUL e surrogates soltos. No login a senha e o
-refresh token sao opacos (so tamanho), para contas antigas continuarem entrando.
+campo:
+
+- **Nomes** (usuario, categoria) e **descricao** aceitam U+200D (ZWJ, emojis compostos), espacos
+  Unicode visiveis e U+200C (ZWNJ, o "meio espaco" persa) **somente** quando o caractere anterior
+  e o seguinte sao letras ou marcas (`\p{L}`/`\p{M}`, pela propriedade Script_Extensions) de
+  escritas nao latinas que usam o ZWNJ: arabe (persa, curdo, urdu), hebraico, siriaco, thaana,
+  devanagari, bengali, gurmukhi, gujarati, oriya, tamil, telugu, kannada, malaiala, sinhala,
+  tailandes, lao, khmer e birmanes. Fica recusado no inicio, no fim, repetido, ao lado de espaco
+  ou digito e entre letras latinas, cirilicas ou gregas (onde so serviria para disfarcar texto).
+  `می‌خواهم` e `نیم‌فاصله` passam; `fo<ZWNJ>od` nao.
+- A **descricao** do gasto ainda aceita TAB, LF e CR (o CRLF dos formularios); outros controles
+  continuam recusados.
+- O **e-mail** nao aceita nenhum espaco Unicode, ZWNJ/ZWJ nem caractere invisivel
+  (`Default_Ignorable_Code_Point`, como U+034F, U+115F, U+3164 e os seletores de variacao, e o
+  braille em branco U+2800).
+- A **senha** de cadastro so recusa controles C0/C1/DEL, NUL e surrogates soltos. No login a
+  senha e o refresh token sao opacos (so tamanho), para contas antigas continuarem entrando.
+
+### E-mail normalizado
+
+Antes de validar, buscar ou gravar, o e-mail passa por `NFKC`, `trim`, minusculas e conversao do
+dominio para punycode (`domainToASCII`; dominio invalido da 400). A mesma funcao vale no registro,
+no login, na busca por e-mail, no seed e na chave de rate limit do login. Assim `café@x.com` em
+NFC e NFD, `ａ@x.com` (largura total) e `a@x.com`, e `user@münchen.de` e
+`user@xn--mnchen-3ya.de` sao o mesmo e-mail (o segundo registro da 409), e contas ja existentes em
+ASCII continuam entrando. O e-mail e **gravado normalizado** (`user@münchen.de` fica
+`user@xn--mnchen-3ya.de`). O projeto ainda nao tem producao, entao nao ha migration de dados; em
+producao, e-mails ja gravados fora dessa forma precisariam de uma migration que os normalize (e
+trate colisoes) antes de subir esta versao.
 
 ## Seguranca
 
@@ -404,7 +447,9 @@ Modelo resumido:
   soltos, corpo JSON ate 100 kb (413), upload ate 5 MiB validado por magic bytes, SQL sempre
   parametrizado.
 - **Respostas**: `helmet`, sem `x-powered-by`, CORS so para as origens de `CORS_ORIGINS`, sem
-  `ETag`/304 e `Cache-Control: no-store` em toda resposta, filtro global de erros sem stack,
+  `ETag` e sem 304 (os cabecalhos condicionais `If-None-Match`, `If-Match`, `If-Modified-Since`,
+  `If-Unmodified-Since` e `If-Range` sao descartados na entrada, ate `If-None-Match: *`) e
+  `Cache-Control: no-store` em toda resposta, filtro global de erros sem stack,
   caminho nem SQL. Os logs nao recebem senha, token, hash, e-mail nem descricao de gasto (um
   teste captura os logs da jornada completa e confere).
 - **Abuso**: rate limit global, por IP nas rotas de auth, por IP + e-mail no login e por usuario no
