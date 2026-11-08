@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import type { INestApplication, Type } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
+import { Test, TestingModuleBuilder } from '@nestjs/testing';
 import { PrismaService } from '../../../src/infrastructure/prisma/prisma.service';
 import { configureApp } from '../../../src/presentation/http/app';
 import { AppConfig } from '../../../src/presentation/http/config';
@@ -33,16 +33,19 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-/** Boots the real app on the test database; `controllers` adds probe controllers for a test. */
+/**
+ * Boots the real app on the test database; `controllers` adds probe controllers for a test and
+ * `customize` swaps providers (for example the receipt extractor) before compiling.
+ */
 export async function startApp(
   overrides: Partial<AppConfig> = {},
   controllers: Type[] = [],
+  customize: (builder: TestingModuleBuilder) => TestingModuleBuilder = (b) => b,
 ): Promise<TestApp> {
   const config = testConfig(overrides);
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule.register(config)],
-    controllers,
-  }).compile();
+  const moduleRef = await customize(
+    Test.createTestingModule({ imports: [AppModule.register(config)], controllers }),
+  ).compile();
   const app = moduleRef.createNestApplication({ logger: false });
   configureApp(app, config);
   await app.init();
