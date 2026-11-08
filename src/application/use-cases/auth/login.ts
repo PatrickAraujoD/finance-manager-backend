@@ -53,13 +53,15 @@ export class Login {
 
     const passwordOk = await this.hasher.verify(user.passwordHash, input.password);
     if (!passwordOk) {
-      await this.users.save(user.registerFailedLogin(now, MAX_FAILED_LOGINS, LOCK_MINUTES));
+      await this.users.mutate(user.id, (u) =>
+        u.registerFailedLogin(now, MAX_FAILED_LOGINS, LOCK_MINUTES),
+      );
       throw this.invalid();
     }
     if (!user.active) throw this.invalid();
 
     if (user.failedLogins > 0 || user.lockedUntil !== null) {
-      await this.users.save(user.resetFailedLogins());
+      await this.users.mutate(user.id, (u) => u.resetFailedLogins());
     }
     return issueSession(
       { refreshTokens: this.refreshTokens, tokens: this.tokens },
