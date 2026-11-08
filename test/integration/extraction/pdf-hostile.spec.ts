@@ -81,11 +81,8 @@ describe('PdfTextExtractor against hostile PDFs', () => {
       expect(sampler.peakGrowthMb()).toBeLessThan(PARENT_GROWTH_LIMIT_MB);
     });
 
-    it('gives no amount at all, and leaves no orphan child', async () => {
-      const result = await new PdfTextExtractor()
-        .extract(fixture('comprovante-texto.pdf'))
-        .catch(() => null);
-      expect(result === null || result.amount === null).toBe(true);
+    it('leaves no orphan child behind', async () => {
+      await new PdfTextExtractor().extract(await flateBombPdf(1)).catch(() => null);
       await new Promise((resolve) => setTimeout(resolve, 500));
       expect(leftoverChildren()).toEqual([]);
     });

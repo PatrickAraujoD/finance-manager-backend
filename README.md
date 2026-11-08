@@ -30,3 +30,10 @@ ativacao em `GET /users` e `PATCH /users/:id`.
 
 `npm test` (unitarios), `npm run test:integration` e `npm run test:e2e` (usam o Postgres do
 `docker compose up -d`, banco separado `finance_test`).
+
+## Imagens Docker
+
+A extracao de PDF roda num processo filho cuja memoria (RSS) o servidor vigia. No Linux ele le
+`/proc/<pid>/status`; onde isso nao existir (macOS) usa `ps`, que imagens enxutas (por exemplo
+`node:*-slim`) podem nao trazer: instale `procps`. Se o RSS nao puder ser lido, o filho e morto
+na hora e o comprovante fica sem valor sugerido (falha fechada), nunca sem limite.

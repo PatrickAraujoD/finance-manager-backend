@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import {
   ExtractionResult,
   ReceiptExtractor,
@@ -120,15 +121,26 @@ export class PdfTextExtractor implements ReceiptExtractor {
       const watchdog = setInterval(() => {
         if (polling || child.pid === undefined) return;
         polling = true;
-        // `ps -o rss=` (KiB) behaves the same on macOS and Linux.
-        execFile('ps', ['-o', 'rss=', '-p', String(child.pid)], { timeout: 1_000 }, (_error, out) => {
-          polling = false;
-          const rssBytes = Number.parseInt(out, 10) * 1024;
-          if (!settled && rssBytes > this.maxRssBytes) {
-            killedForMemory = true;
-            kill();
-          }
-        });
+        // Fail closed: if the child's memory cannot be read, it cannot be limited, so it dies.
+        readRssBytes(child.pid).then(
+          (rssBytes) => {
+            polling = false;
+            if (!settled && rssBytes > this.maxRssBytes) {
+              killedForMemory = true;
+              kill();
+            }
+          },
+          () => {
+            // A child that just exited normally also makes the read fail; give its exit event
+            // a moment to arrive before treating the failure as "cannot be measured".
+            setTimeout(() => {
+              polling = false;
+              if (settled || child.exitCode !== null || child.signalCode !== null) return;
+              killedForMemory = true;
+              kill();
+            }, 50);
+          },
+        );
       }, RSS_POLL_MS);
 
       child.stdio[3]?.on('data', (chunk: Buffer) => {
@@ -160,6 +172,28 @@ export class PdfTextExtractor implements ReceiptExtractor {
       }
     });
   }
+}
+
+/**
+ * Resident memory of a process, in bytes. Reads /proc/<pid>/status (Linux, no extra binary) and
+ * falls back to `ps -o rss=` (macOS; needs `procps` in slim Docker images). Rejects when neither
+ * gives a positive number, so the caller can fail closed.
+ */
+async function readRssBytes(pid: number): Promise<number> {
+  try {
+    const status = await readFile(`/proc/${pid}/status`, 'utf8');
+    const kib = Number.parseInt(/^VmRSS:\s*(\d+)\s*kB/m.exec(status)?.[1] ?? '', 10);
+    if (Number.isFinite(kib) && kib > 0) return kib * 1024;
+  } catch {
+    // No /proc (macOS) or the process is gone: try ps.
+  }
+  return new Promise((resolve, reject) => {
+    execFile('ps', ['-o', 'rss=', '-p', String(pid)], { timeout: 1_000 }, (error, out) => {
+      const kib = Number.parseInt(out, 10);
+      if (error || !Number.isFinite(kib) || kib <= 0) return reject(new Error('RSS unreadable'));
+      resolve(kib * 1024);
+    });
+  });
 }
 
 function parseOutput(output: string): string | null {
