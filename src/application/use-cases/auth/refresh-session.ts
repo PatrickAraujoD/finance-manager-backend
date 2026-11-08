@@ -1,11 +1,11 @@
-import { RefreshToken } from '../../../domain/entities/refresh-token';
 import { UnauthorizedError } from '../../../domain/errors';
 import { Clock } from '../../ports/clock';
 import { IdGenerator } from '../../ports/id-generator';
 import { RefreshTokenRepository } from '../../ports/refresh-token-repository';
 import { TokenService } from '../../ports/token-service';
 import { UserRepository } from '../../ports/user-repository';
-import { INVALID_CREDENTIALS_MESSAGE, REFRESH_TOKEN_TTL_DAYS, SessionTokens } from './login';
+import { issueSession, SessionTokens } from './issue-session';
+import { INVALID_CREDENTIALS_MESSAGE } from './login';
 
 export interface RefreshSessionInput {
   refreshToken: string;
@@ -39,18 +39,10 @@ export class RefreshSession {
     }
 
     await this.refreshTokens.save(stored.revoke(now));
-    const next = this.tokens.generateRefresh();
-    await this.refreshTokens.save(
-      RefreshToken.create({
-        id: this.ids.next(),
-        userId: user.id,
-        familyId: stored.familyId,
-        tokenHash: next.hash,
-        expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 3600_000),
-      }),
+    return issueSession(
+      { refreshTokens: this.refreshTokens, tokens: this.tokens },
+      { user, tokenId: this.ids.next(), familyId: stored.familyId, now },
     );
-    const accessToken = await this.tokens.signAccess({ sub: user.id, role: user.role });
-    return { accessToken, refreshToken: next.token };
   }
 
   private invalid(): UnauthorizedError {

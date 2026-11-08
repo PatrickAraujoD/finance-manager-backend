@@ -1,5 +1,4 @@
 import { Email } from '../../../domain/email';
-import { RefreshToken } from '../../../domain/entities/refresh-token';
 import { User } from '../../../domain/entities/user';
 import { UnauthorizedError, ValidationError } from '../../../domain/errors';
 import { Clock } from '../../ports/clock';
@@ -8,10 +7,13 @@ import { PasswordHasher } from '../../ports/password-hasher';
 import { RefreshTokenRepository } from '../../ports/refresh-token-repository';
 import { TokenService } from '../../ports/token-service';
 import { UserRepository } from '../../ports/user-repository';
+import { issueSession, REFRESH_TOKEN_TTL_DAYS, SessionTokens } from './issue-session';
+
+export { REFRESH_TOKEN_TTL_DAYS };
+export type { SessionTokens };
 
 export const MAX_FAILED_LOGINS = 5;
 export const LOCK_MINUTES = 15;
-export const REFRESH_TOKEN_TTL_DAYS = 7;
 export const INVALID_CREDENTIALS_MESSAGE = 'Invalid credentials';
 
 /**
@@ -24,11 +26,6 @@ export const DUMMY_HASH =
 export interface LoginInput {
   email: string;
   password: string;
-}
-
-export interface SessionTokens {
-  accessToken: string;
-  refreshToken: string;
 }
 
 export class Login {
@@ -60,7 +57,10 @@ export class Login {
     if (user.failedLogins > 0 || user.lockedUntil !== null) {
       await this.users.save(user.resetFailedLogins());
     }
-    return this.issueSession(user, now);
+    return issueSession(
+      { refreshTokens: this.refreshTokens, tokens: this.tokens },
+      { user, tokenId: this.ids.next(), familyId: this.ids.next(), now },
+    );
   }
 
   private async findUser(rawEmail: string): Promise<User | null> {
@@ -70,21 +70,6 @@ export class Login {
       if (e instanceof ValidationError) return null;
       throw e;
     }
-  }
-
-  private async issueSession(user: User, now: Date): Promise<SessionTokens> {
-    const refresh = this.tokens.generateRefresh();
-    await this.refreshTokens.save(
-      RefreshToken.create({
-        id: this.ids.next(),
-        userId: user.id,
-        familyId: this.ids.next(),
-        tokenHash: refresh.hash,
-        expiresAt: new Date(now.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 3600_000),
-      }),
-    );
-    const accessToken = await this.tokens.signAccess({ sub: user.id, role: user.role });
-    return { accessToken, refreshToken: refresh.token };
   }
 
   private invalid(): UnauthorizedError {
