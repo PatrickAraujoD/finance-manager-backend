@@ -3,8 +3,10 @@
 Este guia explica o pipeline de integracao continua (CI), como reproduzi-lo na sua maquina e o que
 fazer quando algo falha. Foi escrito para quem esta aprendendo: cada etapa vem com o porque.
 
-> Estado atual (2026-11-08): o workflow esta escrito, mas ainda NAO rodou no GitHub. Veja
-> `docs/pipeline-status.md`. A imagem Docker tambem ainda NAO foi construida.
+> Estado atual (2026-11-08): o workflow esta escrito, mas ainda NAO rodou no GitHub (o remoto
+> `origin` existe, sem push). Veja `docs/pipeline-status.md`. A imagem Docker FOI construida e
+> executada localmente na revisao final (ver "O que NAO esta coberto"); o job `docker-build` do
+> workflow, porem, tambem ainda nao rodou.
 
 ## O que e CI e CD
 
@@ -33,12 +35,13 @@ O arquivo do pipeline e `.github/workflows/ci.yml`.
 
 | Job | O que roda | Por que existe |
 |---|---|---|
-| `lint-and-typecheck` | `npm ci`, `prisma generate`, `npm run lint`, `npx tsc --noEmit` | O lint inclui as fronteiras de camada (`eslint-plugin-boundaries`): domain/application nao podem importar Nest ou Prisma. O `tsc` pega erros de tipo que o Jest (com `ts-jest`) nao cobre em arquivos sem teste. |
+| `lint-and-typecheck` | confere Node >= 22.9, `npm ci`, `node scripts/check-secrets.js`, `prisma generate`, `npm run lint`, `npx tsc --noEmit` | O lint inclui as fronteiras de camada (`eslint-plugin-boundaries`): domain/application nao podem importar Nest ou Prisma. O `tsc` pega erros de tipo que o Jest (com `ts-jest`) nao cobre em arquivos sem teste. O `check-secrets` varre os arquivos versionados (`git ls-files`) atras de segredos: atribuicoes `*_SECRET`/`*_PASSWORD`/`*_TOKEN`/`API_KEY` com valor de alta entropia, chaves de AWS/GitHub/Stripe/Google/Slack, blocos PEM, JWT, URLs de banco com senha real e cadeias hex/base64 longas (allowlist documentada no cabecalho do script); `.env.example` so pode ter valores vazios ou placeholders; arquivos binarios ou acima de 2 MB geram aviso (e falha se forem arquivo de configuracao). Falha fechada: arquivo de config nao lido = erro. |
 | `unit` | `npm test` | Rapido e sem banco: valida regras de negocio. Falha aqui e feedback em segundos. |
-| `integration-e2e` | Postgres 16 como service, `npm run test:integration`, `npm run test:e2e` | Testa SQL real (constraints, indices, `GROUP BY`) e a API HTTP inteira. Mocks nao pegam erro de migration ou de SQL. |
+| `integration-e2e` | Postgres 16 como service, `npm run test:integration` (com `--verbose`; o resumo do job registra a duracao e o tempo dos testes de OCR), `npm run test:e2e` | Testa SQL real (constraints, indices, `GROUP BY`) e a API HTTP inteira. Mocks nao pegam erro de migration ou de SQL. |
 | `commitlint` | `npx commitlint --from base --to head` | Garante a convencao de commits em TODOS os commits do PR, nao so no ultimo. O hook local pode ser pulado (`--no-verify`); o CI nao. |
-| `security` | `node scripts/audit-gate.js` | Barra dependencias com vulnerabilidade alta nova, sem esconder os riscos ja aceitos. |
+| `security` | `node scripts/audit-gate.js` | Barra dependencias com vulnerabilidade alta nova, sem esconder os riscos ja aceitos. Falha FECHADO: JSON vazio/invalido, sem `auditReportVersion`/`metadata.vulnerabilities`/`vulnerabilities`, ou erro do `npm audit` (rede) saem com codigo != 0; "sem resposta" nunca vira "sem problemas". |
 | `build` | `npx tsc -p tsconfig.build.json` | Prova que o codigo de producao compila (`dist/main.js`), com a configuracao que a imagem Docker usa. |
+| `docker-build` | `docker/build-push-action` (SHA fixado, `push: false`, cache `gha`), depois confere uid != 0 e `/data/uploads` 0700 | Prova que o `Dockerfile` constroi no runner limpo, sem publicar nada. `permissions: contents: read`, timeout de 25 min. |
 
 Os jobs rodam em paralelo (nao ha `needs`): o PR mostra todos os problemas de uma vez.
 
@@ -84,7 +87,7 @@ Aceitos em 2026-11-08 (revisar ate 2027-02-08):
 
 ## Rodando localmente o mesmo que o CI roda
 
-Pre-requisitos: Node 22, Docker.
+Pre-requisitos: Node >= 22.9 (CI e Docker usam 22; o desenvolvimento local do projeto ate aqui foi em Node 26, entao a suite NUNCA rodou localmente em Node 22), Docker.
 
 ```bash
 npm ci
@@ -180,8 +183,12 @@ configurado com prefixo `chore`/`ci` sem `include: scope` pelo mesmo motivo.
 ## O que NAO esta coberto
 
 - **Deploy (CD): nao existe ambiente de producao definido.** Nada publica nem implanta.
-- **Dockerfile e `.dockerignore` existem, mas a imagem NAO foi construida nem testada ainda.**
-  O primeiro `docker build` pode revelar ajustes. O job de CI tambem nao constroi a imagem.
+- **Imagem Docker: construida e executada localmente (revisao final), mas nao em CI.** O reviewer
+  fez `docker build` (~5 min), confirmou usuario uid 1000, `/data/uploads` com 0700, `HEALTHCHECK`
+  `healthy` e upload de PDF e PNG com OCR funcionando dentro do conteiner. Imagem de ~1,09 GB. O
+  job `docker-build` ainda nao rodou no GitHub. NAO validado: o caminho de migrations pelo
+  estagio `build` (`docker build --target build` + `prisma migrate deploy`), `hadolint` e Trivy.
+- Contagens da ultima rodada local: 1059 unitarios, 168 de integracao, 517 e2e.
 - Cobertura de testes, testes de carga, SAST/CodeQL, varredura de imagem, SBOM.
 - Branch protection (exigir os jobs verdes para merge) e uma configuracao do repositorio no
   GitHub, nao do arquivo; precisa ser ligada em Settings > Branches.

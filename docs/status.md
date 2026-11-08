@@ -1,6 +1,6 @@
 # Status do projeto (visao do CTO)
 
-Ultima atualizacao: 2026-11-08. Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
+Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
 
 ## Quadro de tarefas
 
@@ -14,9 +14,10 @@ Ultima atualizacao: 2026-11-08. Fonte detalhada: `docs/superpowers/plans/2026-11
 | 6 | Renda mensal | aprovada |
 | 7 | Comprovantes e extracao (PDF, OCR), Partes A e B | aprovada |
 | 8 | Gastos | aprovada |
-| 9 | Relatorios (4 endpoints) | em correcao apos review |
-| 10 | Endurecimento e fechamento (matriz de autorizacao, README final, fluxo manual) | pendente |
-| - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps, ainda nao executado (`docs/pipeline-status.md`) |
+| 9 | Relatorios (4 endpoints) | aprovada (correcoes de review: a9b6885, 09e14f7) |
+| 10 | Endurecimento e fechamento (matriz de autorizacao, README final) | feita (f5495c4); o fluxo manual com curl NAO foi feito, coberto pelo e2e `user-journey` |
+| - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps; workflow ainda NAO rodou no GitHub (`origin` sem push); imagem Docker construida e testada localmente (`docs/pipeline-status.md`) |
+| - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens 1059 unit / 168 integration / 517 e2e |
 
 ## Decisoes-chave
 
@@ -50,6 +51,14 @@ Ultima atualizacao: 2026-11-08. Fonte detalhada: `docs/superpowers/plans/2026-11
   percentuais em BigInt pelo metodo do maior resto (soma exatamente 100).
 - **Commits:** Conventional Commits sem escopo, sem rodape de coautoria, validados por commitlint
   local (husky) e no CI.
+- **Decisoes da revisao final:** o audit gate falha FECHADO (JSON vazio/invalido/inesperado ou
+  erro do `npm audit` = falha); `check-secrets` cobre atribuicoes `*_SECRET`/`*_PASSWORD`/`*_TOKEN`,
+  tokens de fornecedores e cadeias de alta entropia, exige `.env.example` sem valores reais e nao
+  pula arquivos de configuracao ilegiveis; o CI ganhou `check-secrets`, verificacao de Node
+  >= 22.9 e o job `docker-build` (sem push, SHAs fixados).
+- **Imagem Docker validada localmente:** uid 1000, `/data/uploads` 0700, healthcheck `healthy`,
+  upload de PDF e PNG com OCR no conteiner, ~1,09 GB. Nao validado: migrations pelo estagio
+  `build`, `hadolint`, Trivy.
 - **Riscos de dependencia aceitos** com prazo (`image-size`, `deepmerge-ts`/prisma): ver
   `scripts/audit-gate.js`.
 
@@ -57,11 +66,14 @@ Ultima atualizacao: 2026-11-08. Fonte detalhada: `docs/superpowers/plans/2026-11
 
 | Pendencia | Dono |
 |---|---|
-| Fechar as correcoes de review da Tarefa 9 e reexecutar as tres suites | implementer |
-| Tarefa 10: matriz de autorizacao e2e, README final, fluxo manual com curl | implementer |
-| Primeiro push e primeiro run do CI; corrigir o que falhar | usuario (push) + devops |
+| Primeiro push e primeiro run do CI (7 jobs); corrigir o que falhar | usuario (push) + devops |
 | Ligar branch protection no `main` | usuario |
-| Construir e testar a imagem Docker; definir ambiente de producao e CD | devops (apos decisao do usuario sobre hospedagem) |
+| Rodar a suite em Node 22 (local e Node 26; CI e Docker usam 22) | devops (no primeiro run do CI) |
+| Validar migrations pelo estagio `build`; rodar `hadolint` e Trivy | devops |
+| Definir ambiente de producao e CD | devops (apos decisao do usuario sobre hospedagem) |
+| Fluxo manual com curl contra servidor real (Tarefa 10, Step 3) | implementer/usuario |
+| 429 do upload nao testado em producao; rate limit em memoria por instancia | devops + CTO (antes de escalar) |
+| Homoglifos entre escritas (Cyrillic `і` vs Latin `i`) nao tratados | CTO (decidir se vale tratar) |
 | Encerrar processos jest travados PIDs 96469/96489 | usuario |
 | Revisar advisories aceitos ate 2027-02-08; avaliar Prisma 7 | devops + CTO |
 
