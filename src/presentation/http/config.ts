@@ -3,7 +3,6 @@ import { z } from 'zod';
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
-  JWT_REFRESH_SECRET: z.string().min(32),
   UPLOAD_DIR: z.string().min(1),
   PORT: z.coerce.number().int().positive().default(3000),
   CORS_ORIGINS: z.string().default(''),
@@ -22,7 +21,6 @@ const envSchema = z.object({
 export interface AppConfig {
   databaseUrl: string;
   jwtAccessSecret: string;
-  jwtRefreshSecret: string;
   uploadDir: string;
   port: number;
   /** Allowed CORS origins; empty means CORS is disabled. */
@@ -51,7 +49,6 @@ export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   return {
     databaseUrl: e.DATABASE_URL,
     jwtAccessSecret: e.JWT_ACCESS_SECRET,
-    jwtRefreshSecret: e.JWT_REFRESH_SECRET,
     uploadDir: e.UPLOAD_DIR,
     port: e.PORT,
     corsOrigins: e.CORS_ORIGINS.split(',')
