@@ -88,4 +88,38 @@ describe('http security', () => {
       for (let i = 0; i < 8; i++) expect((await http().get('/health')).status).toBe(200);
     });
   });
+
+  describe('rate limiting behind spoofed X-Forwarded-For', () => {
+    let t: TestApp;
+    beforeAll(async () => {
+      t = await startApp({ authThrottleLimit: 5, throttleLimit: 1000, trustProxy: false });
+    });
+    afterAll(async () => {
+      await t.close();
+    });
+
+    it('does not let a varying X-Forwarded-For bypass the limit (429 on the 6th)', async () => {
+      const http = () => request(t.app.getHttpServer());
+      const body = { email: 'ghost@example.com', password: 'whatever it is' };
+      const statuses: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const res = await http().post('/auth/login').set('X-Forwarded-For', `203.0.113.${i + 1}`).send(body);
+        statuses.push(res.status);
+      }
+      expect(statuses).toEqual([401, 401, 401, 401, 401, 429]);
+    });
+
+    it('does not let a varying X-Forwarded-For bypass the limit with different emails', async () => {
+      const http = () => request(t.app.getHttpServer());
+      const statuses: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const res = await http()
+          .post('/auth/register')
+          .set('X-Forwarded-For', `198.51.100.${i + 1}`)
+          .send({ name: 'x', email: `bad${i}`, password: 'short' });
+        statuses.push(res.status);
+      }
+      expect(statuses).toEqual([400, 400, 400, 400, 400, 429]);
+    });
+  });
 });

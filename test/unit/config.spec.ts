@@ -49,16 +49,18 @@ describe('loadConfig', () => {
 
   it.each([
     ['false', false],
-    ['true', true],
     ['1', 1],
     ['2', 2],
   ])('parses TRUST_PROXY=%s', (raw, expected) => {
     expect(loadConfig({ ...valid, TRUST_PROXY: raw }).trustProxy).toBe(expected);
   });
 
-  it('rejects an invalid TRUST_PROXY', () => {
-    expect(() => loadConfig({ ...valid, TRUST_PROXY: 'loopback' })).toThrow('TRUST_PROXY');
-  });
+  it.each(['true', '0', '00', '01', '-1', '1.5', 'loopback', '10.0.0.0/8', ' 1', '', 'FALSE'])(
+    'rejects the ambiguous TRUST_PROXY %p (only false or an exact hop count >= 1)',
+    (raw) => {
+      expect(() => loadConfig({ ...valid, TRUST_PROXY: raw })).toThrow('TRUST_PROXY');
+    },
+  );
 
   it('reads the throttle limits', () => {
     const config = loadConfig({
