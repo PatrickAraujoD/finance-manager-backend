@@ -345,6 +345,7 @@ describe('receipts with swapped providers', () => {
     use: (t: TestApp) => Promise<void>,
     providers: Record<symbol, unknown>,
   ): Promise<void> {
+    for (const f of await readdir(uploadDirLocal)) await unlink(join(uploadDirLocal, f));
     const t = await startApp({ uploadDir: uploadDirLocal }, [], (b) => {
       for (const sym of Object.getOwnPropertySymbols(providers)) {
         b.overrideProvider(sym).useValue(providers[sym]);
@@ -411,7 +412,6 @@ describe('receipts with swapped providers', () => {
       },
       { [RECEIPT_EXTRACTOR]: { extract } satisfies ReceiptExtractor },
     );
-    for (const f of await readdir(uploadDirLocal)) await unlink(join(uploadDirLocal, f));
   });
 
   it('answers a generic 500 and leaves no orphan file when the database fails', async () => {
