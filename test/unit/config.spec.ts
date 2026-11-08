@@ -2,7 +2,7 @@ import { loadConfig } from '../../src/presentation/http/config';
 
 const valid = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
-  JWT_ACCESS_SECRET: 'q7Lw3Zr9Kx0TnVb5Hd2Jf8Gs4Mc1Yp6Aw7Eu3Rt9Ni5Ob2Xk',
+  JWT_ACCESS_SECRET: 'blue-river-stone-quiet-garden-lamp-47-wide',
   UPLOAD_DIR: './uploads',
 };
 
@@ -147,7 +147,7 @@ describe('loadConfig server timeouts', () => {
       'a'.repeat(48),
       'abababababababababababababababababababab',
       '0123456789'.repeat(5).slice(0, 9).repeat(6),
-      'q7Lw3Zr9Kx0TnVb5Hd2Jf8Gs4Mc1Yp6',
+      'blue-river-stone-quiet-garden',
     ])('refuses the weak or placeholder secret %p', (value) => {
       expect(() => loadConfig(secret(value))).toThrow(/JWT_ACCESS_SECRET/);
     });
@@ -164,7 +164,7 @@ describe('loadConfig server timeouts', () => {
     });
 
     it('accepts a generated base64 secret', () => {
-      const generated = 'k3Jx9/Qm2vWb+7YtLd0RzPn5HcA8sUeXg1FoIyN4TaB6VqKw2ZrMj';
+      const generated = 'wide-open/sky+over-the-quiet-hills=Q9';
       expect(loadConfig(secret(generated)).jwtAccessSecret).toBe(generated);
     });
   });
