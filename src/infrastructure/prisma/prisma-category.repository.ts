@@ -1,4 +1,5 @@
 import { Category as CategoryRow, Prisma } from '@prisma/client';
+import { MAX_LIST_RESULTS } from '../../application/ports/limits';
 import { CategoryRepository } from '../../application/ports/category-repository';
 import { Category } from '../../domain/entities/category';
 import { ConflictError } from '../../domain/errors';
@@ -44,6 +45,7 @@ export class PrismaCategoryRepository implements CategoryRepository {
     const rows = await this.prisma.client.category.findMany({
       where: { OR: [{ ownerId: null }, { ownerId: userId }] },
       orderBy: [{ nameKey: 'asc' }, { id: 'asc' }],
+      take: MAX_LIST_RESULTS,
     });
     return rows.map(toDomain);
   }

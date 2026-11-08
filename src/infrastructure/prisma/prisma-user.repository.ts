@@ -1,4 +1,5 @@
 import { Prisma, User as UserRow } from '@prisma/client';
+import { MAX_LIST_RESULTS } from '../../application/ports/limits';
 import { UserRepository } from '../../application/ports/user-repository';
 import { Email } from '../../domain/email';
 import { User } from '../../domain/entities/user';
@@ -70,7 +71,10 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async list(): Promise<User[]> {
-    const rows = await this.prisma.client.user.findMany({ orderBy: { createdAt: 'asc' } });
+    const rows = await this.prisma.client.user.findMany({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: MAX_LIST_RESULTS,
+    });
     return rows.map(toDomain);
   }
 
