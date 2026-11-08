@@ -42,7 +42,9 @@ function hasMisplacedZwnj(value: string): boolean {
   }
   return false;
 }
-const EMAIL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Zs}]/u;
+// Also Default_Ignorable_Code_Point (CGJ, Hangul fillers, variation selectors, tags...) and the
+// Braille blank U+2800, which render as nothing but are not Cc/Cf/Zs.
+const EMAIL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Zs}\p{Default_Ignorable_Code_Point}\u2800]/u;
 
 /**
  * What a text field may contain:
@@ -50,7 +52,7 @@ const EMAIL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Zs}]/u;
  * - `name` (user and category names): like strict but allows ZWJ, visible Unicode spaces and ZWNJ
  *   only between two letters/marks of non Latin scripts (Persian, Indic, Thai...).
  * - `description`: like `name` and always keeps TAB and LF.
- * - `email`: no Cc, Cf, Zl, Zp or any Unicode space (Zs), without exception.
+ * - `email`: no Cc, Cf, Zl, Zp, Zs, Default_Ignorable_Code_Point or U+2800, without exception.
  * - `password` (registration): only C0/C1 controls, DEL, NUL and lone surrogates are refused.
  */
 export type TextKind = 'strict' | 'name' | 'description' | 'email' | 'password';
