@@ -27,6 +27,7 @@ function toDomain(row: ExpenseRow): Expense {
     // DATE column: Prisma returns 00:00 UTC of the stored day.
     spentAt: row.spentAt,
     description: row.description ?? undefined,
+    createdAt: row.createdAt,
   });
 }
 

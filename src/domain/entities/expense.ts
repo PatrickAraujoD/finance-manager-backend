@@ -19,6 +19,8 @@ export interface ExpenseProps {
   paidAlone: boolean;
   spentAt: Date;
   description?: string;
+  /** Set by the database; null until the expense is persisted. */
+  createdAt?: Date | null;
 }
 
 function toUtcDay(d: Date): Date {
@@ -42,7 +44,11 @@ export class Expense {
     if (input.description !== undefined && input.description.length > MAX_DESCRIPTION) {
       throw new ValidationError(`Description must have at most ${MAX_DESCRIPTION} characters`);
     }
-    return new Expense({ ...input, spentAt: toUtcDay(input.spentAt) });
+    return new Expense({
+      ...input,
+      spentAt: toUtcDay(input.spentAt),
+      createdAt: input.createdAt ? new Date(input.createdAt.getTime()) : null,
+    });
   }
 
   get id(): string {
@@ -68,5 +74,8 @@ export class Expense {
   }
   get description(): string | undefined {
     return this.props.description;
+  }
+  get createdAt(): Date | null {
+    return this.props.createdAt ? new Date(this.props.createdAt.getTime()) : null;
   }
 }

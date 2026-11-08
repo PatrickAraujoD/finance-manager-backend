@@ -53,6 +53,7 @@ export class UpdateExpense {
       paidAlone: alone ?? current.paidAlone,
       spentAt: date ?? current.spentAt,
       description: text ? text.value : current.description,
+      createdAt: current.createdAt,
     });
     // False means the expense vanished between the read and the write (concurrent delete).
     if (!(await this.expenses.update(updated))) throw new NotFoundError('Expense not found');

@@ -33,6 +33,7 @@ export class FakeExpenseRepository implements ExpenseRepository {
         paidAlone: expense.paidAlone,
         spentAt: expense.spentAt,
         description: expense.description,
+        createdAt: current.createdAt,
       }),
     );
     return true;
