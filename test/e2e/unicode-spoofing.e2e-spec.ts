@@ -162,6 +162,57 @@ describe('invisible and spoofing Unicode', () => {
     });
   });
 
+  describe('email normalization', () => {
+    const NFC = 'caf\u00e9@example.com';
+    const NFD = 'cafe\u0301@example.com';
+    const storedEmails = async () =>
+      (await t.prisma.client.user.findMany({ select: { email: true } })).map((u) => u.email).sort();
+
+    it('NFC then NFD registers one account (second is 409)', async () => {
+      expect((await register('Bia', NFC)).status).toBe(201);
+      expect((await register('Bia', NFD)).status).toBe(409);
+      expect(await storedEmails()).toContain(NFC);
+    });
+
+    it('full width letters are the same account as ASCII', async () => {
+      expect((await register('Bia', 'a@example.com')).status).toBe(201);
+      expect((await register('Bia', '\uff41@example.com')).status).toBe(409);
+    });
+
+    it('IDN and punycode are the same account, stored as punycode', async () => {
+      expect((await register('Bia', 'user@m\u00fcnchen.de')).status).toBe(201);
+      expect((await register('Bia', 'user@xn--mnchen-3ya.de')).status).toBe(409);
+      expect((await register('Bia', 'user@M\u00dcNCHEN.de')).status).toBe(409);
+      expect(await storedEmails()).toContain('user@xn--mnchen-3ya.de');
+    });
+
+    it('login with the NFD variant finds the account registered in NFC', async () => {
+      await register('Bia', NFC);
+      const res = await http().post('/auth/login').send({ email: NFD, password: PASSWORD });
+      expect(res.status).toBe(200);
+    });
+
+    it('login with the unicode domain finds the punycode account', async () => {
+      await register('Bia', 'user@xn--mnchen-3ya.de');
+      const res = await http()
+        .post('/auth/login')
+        .send({ email: 'user@m\u00fcnchen.de', password: PASSWORD });
+      expect(res.status).toBe(200);
+    });
+
+    it.each(['\u034f', '\u115f', '\u3164', '\u2800', '\u180b', '\ufe0f'].map((c) => [label(c), c]))(
+      'registration and login reject the invisible %s (400)',
+      async (_l, c) => {
+        expect((await register('Bia', `a${c}b@example.com`)).status).toBe(400);
+        expect((await register('Bia', `ab@exa${c}mple.com`)).status).toBe(400);
+        const res = await http()
+          .post('/auth/login')
+          .send({ email: `a${c}b@example.com`, password: PASSWORD });
+        expect(res.status).toBe(400);
+      },
+    );
+  });
+
   describe('registration password', () => {
     it('accepts invisible Unicode (only controls are refused)', async () => {
       const res = await register('Caio', 'caio@example.com', `pass\u200bword\u202e long enough`);
