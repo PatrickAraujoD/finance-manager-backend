@@ -180,6 +180,32 @@ describe('Category', () => {
     expect(composed.nameKey).toBe(decomposed.nameKey);
   });
 
+  it('stores the name in NFC with repeated inner whitespace collapsed to one space', () => {
+    const c = Category.create({ id: 'c1', name: '  Cafe\u0301 \t  da   \n manha  ', ownerId: null });
+    expect(c.name).toBe('Caf\u00e9 da manha');
+    expect(c.name).toBe(c.name.normalize('NFC'));
+  });
+
+  it('makes names that differ only by inner spacing collide', () => {
+    const a = Category.create({ id: 'c1', name: 'a  b', ownerId: null });
+    const b = Category.create({ id: 'c2', name: 'a b', ownerId: null });
+    expect(a.nameKey).toBe(b.nameKey);
+    expect(a.name).toBe('a b');
+  });
+
+  it('measures the 60 limit in code points, so emoji are not penalized', () => {
+    const sixty = '\u{1F600}'.repeat(60);
+    expect(Category.create({ id: 'c1', name: sixty, ownerId: null }).name).toBe(sixty);
+    expect(() => Category.create({ id: 'c1', name: sixty + '\u{1F600}', ownerId: null })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('measures the limit after normalization', () => {
+    const padded = 'x'.repeat(30) + ' '.repeat(40) + 'y'.repeat(29);
+    expect(Category.create({ id: 'c1', name: padded, ownerId: null }).name).toHaveLength(60);
+  });
+
   it('rejects names over 60 characters', () => {
     expect(() => Category.create({ id: 'c1', name: 'x'.repeat(61), ownerId: null })).toThrow(
       ValidationError,

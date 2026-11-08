@@ -72,6 +72,13 @@ describe('CreateCategory', () => {
     );
   });
 
+  it('treats names that differ only by inner whitespace as duplicates and stores the normalized one', async () => {
+    const { create, categories } = setup();
+    const { id } = await create.execute(ana, { name: 'Casa   e  lazer' });
+    expect((await categories.findById(id))?.name).toBe('Casa e lazer');
+    await expect(create.execute(ana, { name: 'casa e lazer' })).rejects.toBeInstanceOf(ConflictError);
+  });
+
   it('allows the same name for different owners and for a personal vs a global one', async () => {
     const { create } = setup();
     await create.execute(ana, { name: 'Mercado' });
