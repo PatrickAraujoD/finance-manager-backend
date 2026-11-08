@@ -13,6 +13,12 @@ export class FakeRefreshTokenRepository implements RefreshTokenRepository {
     for (const t of this.items.values()) if (t.tokenHash === tokenHash) return t;
     return null;
   }
+  async revokeIfActive(id: string, now: Date): Promise<boolean> {
+    const t = this.items.get(id);
+    if (!t || t.revokedAt !== null) return false;
+    this.items.set(id, t.revoke(now));
+    return true;
+  }
   async revokeFamily(familyId: string): Promise<void> {
     for (const [id, t] of this.items) {
       if (t.familyId === familyId && t.revokedAt === null) this.items.set(id, t.revoke(this.now()));

@@ -38,7 +38,11 @@ export class RefreshSession {
       throw this.invalid();
     }
 
-    await this.refreshTokens.save(stored.revoke(now));
+    // Atomic claim: if a concurrent refresh already consumed this token, treat it as reuse.
+    if (!(await this.refreshTokens.revokeIfActive(stored.id, now))) {
+      await this.refreshTokens.revokeFamily(stored.familyId);
+      throw this.invalid();
+    }
     return issueSession(
       { refreshTokens: this.refreshTokens, tokens: this.tokens },
       { user, tokenId: this.ids.next(), familyId: stored.familyId, now },
