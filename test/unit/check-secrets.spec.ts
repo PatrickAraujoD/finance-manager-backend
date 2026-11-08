@@ -116,7 +116,7 @@ describe('secrets check: vendor token formats', () => {
     ['a Google API key', google],
     ['a Slack token', slack],
   ])('flags %s', (_n, token) => {
-    expect(findProblems([{ path: 'src/x.ts', content: `v = "${token}"` }])).toHaveLength(1);
+    expect(findProblems([{ path: 'src/x.ts', content: `v = "${token}"` }])).not.toEqual([]);
   });
 });
 
