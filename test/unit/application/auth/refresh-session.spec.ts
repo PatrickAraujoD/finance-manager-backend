@@ -31,7 +31,7 @@ async function setup() {
   const login = new Login(users, refreshTokens, hasher, tokens, clock, ids);
   const refresh = new RefreshSession(users, refreshTokens, tokens, clock, ids);
   const session = await login.execute({ email: 'ana@x.com', password: PASSWORD });
-  return { clock, users, refreshTokens, tokens, refresh, session };
+  return { clock, users, refreshTokens, tokens, ids, refresh, session };
 }
 
 describe('RefreshSession', () => {
@@ -84,14 +84,14 @@ describe('RefreshSession', () => {
   });
 
   it('reuse does not affect other families of the same user', async () => {
-    const { refresh, session, refreshTokens, tokens, users } = await setup();
+    const { refresh, session, refreshTokens, tokens, users, ids, clock } = await setup();
     const login = new Login(
       users,
       refreshTokens,
       new FakePasswordHasher(),
       tokens,
-      new FixedClock(),
-      new SequentialIdGenerator(),
+      clock,
+      ids,
     );
     const other = await login.execute({ email: 'ana@x.com', password: PASSWORD });
     await refresh.execute({ refreshToken: session.refreshToken });
