@@ -13,6 +13,12 @@ export function configureApp(app: INestApplication, config: AppConfig): void {
   const express = app as NestExpressApplication;
   express.disable('x-powered-by');
   express.set('trust proxy', config.trustProxy);
+  // No ETag (so no 304 either) and no caching: responses carry tokens and personal data.
+  express.set('etag', false);
+  express.use((_req: unknown, res: { setHeader(n: string, v: string): void }, next: () => void) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   express.useBodyParser('json', { limit: JSON_BODY_LIMIT });
   express.useBodyParser('urlencoded', { limit: JSON_BODY_LIMIT, extended: false });
   express.use(helmet());
