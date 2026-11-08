@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { Argon2Hasher } from '../../src/infrastructure/hashing/argon2-hasher';
 import { cleanTables, startApp, TestApp } from './support/test-app';
 
 const PASSWORD = 'correct horse battery';
@@ -91,6 +92,35 @@ describe('auth endpoints', () => {
 
     it('rejects a password over 128 characters (400)', async () => {
       expect((await login('ana@example.com', 'x'.repeat(129))).status).toBe(400);
+    });
+  });
+
+  describe('passwords with control characters (legacy accounts)', () => {
+    const legacy = ['tab\tin the middle ok', 'esc\u001bape in the middle', 'del\u007fete in the middle'];
+
+    it.each(legacy)('logs in a user created directly with the password %j', async (password) => {
+      await t.prisma.client.user.create({
+        data: {
+          id: 'legacy',
+          name: 'Legacy',
+          email: 'legacy@example.com',
+          passwordHash: await new Argon2Hasher().hash(password),
+          role: 'N',
+        },
+      });
+      const res = await login('legacy@example.com', password);
+      expect(res.status).toBe(200);
+      expect(typeof res.body.accessToken).toBe('string');
+    });
+
+    it.each(legacy)('still rejects the same password at registration (400): %j', async (password) => {
+      expect((await register('new@example.com', password)).status).toBe(400);
+      expect(await t.prisma.client.user.count()).toBe(0);
+    });
+
+    it('answers 401, not 400, to a refresh token with control characters', async () => {
+      const res = await http().post('/auth/refresh').send({ refreshToken: 'abc\tdef\u001b' });
+      expect(res.status).toBe(401);
     });
   });
 
