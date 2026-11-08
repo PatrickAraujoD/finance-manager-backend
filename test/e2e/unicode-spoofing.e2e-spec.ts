@@ -113,6 +113,15 @@ describe('invisible and spoofing Unicode', () => {
       expect((await expenseWith('linha\u2028outra')).status).toBe(400);
     });
 
+    it('accept CRLF and a lone CR (form submissions)', async () => {
+      expect((await expenseWith('linha 1\r\nlinha 2\rlinha 3')).status).toBe(201);
+    });
+
+    it('still reject other controls such as VT and FF', async () => {
+      expect((await expenseWith('a\u000bb')).status).toBe(400);
+      expect((await expenseWith('a\u000cb')).status).toBe(400);
+    });
+
     it('accept TAB, LF and a ZWJ emoji', async () => {
       expect((await expenseWith(`a\tb\nc ${FAMILY}`)).status).toBe(201);
     });

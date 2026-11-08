@@ -95,7 +95,7 @@ describe('expense description', () => {
 
   it('accepts TAB, LF, ZWJ emoji, accents and visible Unicode spaces', () => {
     expect(() =>
-      Expense.create({ ...expense, description: `a\tb\nc ${FAMILY} Almoço\u00a0\u2003x` }),
+      Expense.create({ ...expense, description: `a\tb\r\nc ${FAMILY} Almoço\u00a0\u2003x` }),
     ).not.toThrow();
   });
 });

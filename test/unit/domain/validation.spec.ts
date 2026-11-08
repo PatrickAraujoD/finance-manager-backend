@@ -43,15 +43,16 @@ describe('control characters', () => {
     expect(() => requireNonBlank(`a${c}b`, 'name')).toThrow(ValidationError);
   });
 
-  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF'))(
+  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF' && n !== 'CR'))(
     'multiline text still rejects %s',
     (_n, c) => {
       expect(() => requireCleanText(`a${c}b`, 'f', { multiline: true })).toThrow(ValidationError);
     },
   );
 
-  it('multiline text accepts TAB and LF', () => {
+  it('multiline text accepts TAB, LF and CR (CRLF from forms)', () => {
     expect(() => requireCleanText('a\tb\nc', 'f', { multiline: true })).not.toThrow();
+    expect(() => requireCleanText('a\r\nb\rc', 'f', { multiline: true })).not.toThrow();
   });
 
   it('keeps accepting non-control characters next to the C1 range', () => {
@@ -73,8 +74,8 @@ describe('control characters', () => {
     );
   });
 
-  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF'))(
-    'an expense description rejects %s but accepts TAB and LF',
+  it.each(controls.filter(([n]) => n !== 'TAB' && n !== 'LF' && n !== 'CR'))(
+    'an expense description rejects %s but accepts TAB, LF and CR',
     (_n, c) => {
       const base = {
         id: 'e1',
@@ -86,7 +87,7 @@ describe('control characters', () => {
         spentAt: new Date('2026-11-01T00:00:00Z'),
       };
       expect(() => Expense.create({ ...base, description: `a${c}b` })).toThrow(ValidationError);
-      expect(() => Expense.create({ ...base, description: 'a\tb\nc' })).not.toThrow();
+      expect(() => Expense.create({ ...base, description: 'a\tb\nc\r\nd' })).not.toThrow();
     },
   );
 });
