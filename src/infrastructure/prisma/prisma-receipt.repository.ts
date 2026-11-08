@@ -1,4 +1,4 @@
-import { Receipt as ReceiptRow } from '@prisma/client';
+import { Prisma, Receipt as ReceiptRow } from '@prisma/client';
 import { ReceiptRepository } from '../../application/ports/receipt-repository';
 import { Receipt } from '../../domain/entities/receipt';
 import { ConflictError } from '../../domain/errors';
@@ -23,21 +23,26 @@ function toDomain(row: ReceiptRow): Receipt {
   });
 }
 
+/** Unique violation on the primary key (not on storageKey, which must keep failing loudly). */
+function isIdTaken(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+  const target = error.meta?.target;
+  const fields = Array.isArray(target) ? target.map(String) : [String(target)];
+  return fields.includes('id') || fields.includes('Receipt_pkey');
+}
+
 export class PrismaReceiptRepository implements ReceiptRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Inserts the receipt, or updates it when the id exists. An existing receipt keeps its owner:
-   * saving the id as another user is a ConflictError, never a transfer of ownership.
+   * Inserts the receipt, or updates it when the id exists and is the user's own. There is no
+   * read-then-write: the insert decides ownership atomically (the primary key), and the update
+   * is filtered by owner and never touches `userId`. An id owned by someone else is a
+   * ConflictError, never a transfer of ownership or an overwrite.
    */
   async save(receipt: Receipt): Promise<void> {
-    const existing = await this.prisma.client.receipt.findUnique({
-      where: { id: receipt.id },
-      select: { userId: true },
-    });
-    if (existing && existing.userId !== receipt.userId) {
-      throw new ConflictError('Receipt belongs to another user');
-    }
     const data = {
       storageKey: receipt.storageKey,
       mimeType: receipt.mimeType,
@@ -45,11 +50,18 @@ export class PrismaReceiptRepository implements ReceiptRepository {
       suggestedAmountCents:
         receipt.suggestedAmount === null ? null : BigInt(receipt.suggestedAmount.cents),
     };
-    await this.prisma.client.receipt.upsert({
-      where: { id: receipt.id },
-      create: { id: receipt.id, userId: receipt.userId, ...data },
-      update: data,
-    });
+    try {
+      await this.prisma.client.receipt.create({
+        data: { id: receipt.id, userId: receipt.userId, ...data },
+      });
+    } catch (error) {
+      if (!isIdTaken(error)) throw error;
+      const updated = await this.prisma.client.receipt.updateMany({
+        where: { id: receipt.id, userId: receipt.userId },
+        data,
+      });
+      if (updated.count === 0) throw new ConflictError('Receipt belongs to another user');
+    }
   }
 
   async findById(id: string): Promise<Receipt | null> {
