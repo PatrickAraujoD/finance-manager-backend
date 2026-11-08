@@ -5,22 +5,24 @@ export const MAX_REFRESH_TOKEN_LENGTH = 512;
 
 export class RegisterDto {
   @IsString()
-  @CleanText()
+  @CleanText({ kind: 'name' })
   @Length(1, 100)
   name!: string;
 
   @IsEmail()
+  @CleanText({ kind: 'email' })
   @MaxLength(254)
   email!: string;
 
   @IsString()
-  @CleanText()
+  @CleanText({ kind: 'password' })
   @Length(12, 128)
   password!: string;
 }
 
 export class LoginDto {
   @IsEmail()
+  @CleanText({ kind: 'email' })
   @MaxLength(254)
   email!: string;
 

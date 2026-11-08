@@ -14,7 +14,7 @@ export class Category {
 
   static create(input: CategoryProps): Category {
     requireNonBlank(input.id, 'id');
-    requireNonBlank(input.name, 'Category name');
+    requireNonBlank(input.name, 'Category name', { kind: 'name' });
     if (input.ownerId !== null) requireNonBlank(input.ownerId, 'ownerId');
     // Stored form: NFC, inner whitespace runs collapsed to one space, trimmed. The limit counts
     // code points (not UTF-16 units) so emoji are not penalized.

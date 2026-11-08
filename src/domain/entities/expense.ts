@@ -35,7 +35,7 @@ export class Expense {
     requireNonBlank(input.userId, 'userId');
     requireNonBlank(input.categoryId, 'categoryId');
     if (input.receiptId !== null) requireNonBlank(input.receiptId, 'receiptId');
-    if (input.description !== undefined) requireCleanText(input.description, 'description', { multiline: true });
+    if (input.description !== undefined) requireCleanText(input.description, 'description', { kind: 'description' });
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (input.amount.cents > MAX_EXPENSE_CENTS) {
       throw new ValidationError(`Expense amount must be at most ${MAX_EXPENSE_CENTS} cents`);

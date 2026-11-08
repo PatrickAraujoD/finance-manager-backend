@@ -1,16 +1,16 @@
 import { registerDecorator, ValidationOptions } from 'class-validator';
-import { hasUnsafeText } from '../../../domain/validation';
+import { hasUnsafeText, TextKind } from '../../../domain/validation';
 
 export interface CleanTextOptions extends ValidationOptions {
-  /** Allows TAB and LF (free text such as a description). */
-  multiline?: boolean;
+  /** Which Unicode classes are refused; see `TextKind` in the domain. Defaults to `strict`. */
+  kind?: TextKind;
 }
 
 /**
- * Fails validation (400) for strings with NUL, any other control character or lone surrogates.
- * Single-line by default; `multiline` still rejects every control except TAB and LF.
+ * Fails validation (400) for strings with NUL, controls, invisible or spoofing Unicode (per
+ * `kind`) or lone surrogates.
  */
-export function CleanText({ multiline, ...options }: CleanTextOptions = {}): PropertyDecorator {
+export function CleanText({ kind, ...options }: CleanTextOptions = {}): PropertyDecorator {
   return (target, propertyName) => {
     registerDecorator({
       name: 'cleanText',
@@ -18,8 +18,7 @@ export function CleanText({ multiline, ...options }: CleanTextOptions = {}): Pro
       propertyName: propertyName as string,
       options: { message: '$property contains invalid characters', ...options },
       validator: {
-        validate: (value: unknown) =>
-          typeof value === 'string' && !hasUnsafeText(value, { multiline }),
+        validate: (value: unknown) => typeof value === 'string' && !hasUnsafeText(value, { kind }),
       },
     });
   };

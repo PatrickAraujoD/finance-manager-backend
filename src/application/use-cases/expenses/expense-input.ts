@@ -42,7 +42,7 @@ export function toSpentAt(value: unknown, clock: Clock): Date {
 /** Trimmed text of at most 500 characters; blank means "no description" (undefined). */
 export function toDescription(value: unknown): string | undefined {
   if (typeof value !== 'string') throw new ValidationError('description must be text');
-  requireCleanText(value, 'description', { multiline: true });
+  requireCleanText(value, 'description', { kind: 'description' });
   const text = value.trim();
   if (text.length > MAX_EXPENSE_DESCRIPTION) {
     throw new ValidationError(

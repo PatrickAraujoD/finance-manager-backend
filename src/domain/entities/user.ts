@@ -28,7 +28,7 @@ export class User {
 
   static create(input: CreateUserInput): User {
     requireNonBlank(input.id, 'id');
-    requireNonBlank(input.name, 'User name');
+    requireNonBlank(input.name, 'User name', { kind: 'name' });
     const name = input.name.trim();
     if (!input.passwordHash) throw new ValidationError('Password hash is required');
     requireCleanText(input.passwordHash, 'Password hash');
