@@ -1,6 +1,7 @@
 import { Category } from '../../domain/entities/category';
 
 export interface CategoryRepository {
+  /** Upsert: inserts or replaces the category with the same id. */
   save(category: Category): Promise<void>;
   findById(id: string): Promise<Category | null>;
   /** Global categories plus the ones owned by `userId`. */

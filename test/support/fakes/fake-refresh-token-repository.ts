@@ -18,4 +18,9 @@ export class FakeRefreshTokenRepository implements RefreshTokenRepository {
       if (t.familyId === familyId && t.revokedAt === null) this.items.set(id, t.revoke(this.now()));
     }
   }
+  async revokeAllByUser(userId: string): Promise<void> {
+    for (const [id, t] of this.items) {
+      if (t.userId === userId && t.revokedAt === null) this.items.set(id, t.revoke(this.now()));
+    }
+  }
 }

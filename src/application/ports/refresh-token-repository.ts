@@ -5,4 +5,6 @@ export interface RefreshTokenRepository {
   findByHash(tokenHash: string): Promise<RefreshToken | null>;
   /** Revokes every non-revoked token of the family. */
   revokeFamily(familyId: string): Promise<void>;
+  /** Revokes every non-revoked token of the user (e.g. when the user is deactivated). */
+  revokeAllByUser(userId: string): Promise<void>;
 }

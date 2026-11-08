@@ -1,12 +1,13 @@
 import { FileStorage } from '../../../src/application/ports/file-storage';
-import { NotFoundError } from '../../../src/domain/errors';
+import { NotFoundError, ValidationError } from '../../../src/domain/errors';
 
 export class FakeFileStorage implements FileStorage {
   private readonly files = new Map<string, Buffer>();
   private counter = 0;
 
   async save(buffer: Buffer, ext: string): Promise<string> {
-    const key = `file-${++this.counter}${ext}`;
+    if (!/^[a-z0-9]{1,5}$/.test(ext)) throw new ValidationError('Invalid file extension');
+    const key = `file-${++this.counter}.${ext}`;
     this.files.set(key, buffer);
     return key;
   }

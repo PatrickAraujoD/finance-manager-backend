@@ -1,6 +1,10 @@
 import { Money } from '../../domain/money';
 
-/** All `month` arguments are `YYYY-MM`; `date` is `YYYY-MM-DD`. Only user-owned expenses count. */
+/**
+ * All `month` arguments are `YYYY-MM`; `date` is `YYYY-MM-DD`. Only user-owned expenses count.
+ * `Expense.spentAt` is a calendar date stored as `Date` at 00:00 UTC, so grouping by day/month
+ * is always done in UTC (CTO decision).
+ */
 export interface CategoryTotal {
   categoryId: string;
   categoryName: string;

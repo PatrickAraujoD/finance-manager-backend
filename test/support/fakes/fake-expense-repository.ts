@@ -14,13 +14,15 @@ export class FakeExpenseRepository implements ExpenseRepository {
     return this.items.get(id) ?? null;
   }
   async listByUser(userId: string, filter: ExpenseFilter): Promise<Expense[]> {
-    return [...this.items.values()].filter(
-      (e) =>
-        e.userId === userId &&
-        (!filter.from || e.spentAt >= filter.from) &&
-        (!filter.to || e.spentAt <= filter.to) &&
-        (!filter.categoryId || e.categoryId === filter.categoryId),
-    );
+    return [...this.items.values()]
+      .filter(
+        (e) =>
+          e.userId === userId &&
+          (!filter.from || e.spentAt >= filter.from) &&
+          (!filter.to || e.spentAt <= filter.to) &&
+          (!filter.categoryId || e.categoryId === filter.categoryId),
+      )
+      .sort((x, y) => y.spentAt.getTime() - x.spentAt.getTime() || (x.id < y.id ? 1 : -1));
   }
   async delete(id: string): Promise<void> {
     this.items.delete(id);
