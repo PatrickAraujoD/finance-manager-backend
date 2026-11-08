@@ -48,6 +48,10 @@ export class PrismaCategoryRepository implements CategoryRepository {
     return rows.map(toDomain);
   }
 
+  async countOwnedBy(userId: string): Promise<number> {
+    return this.prisma.client.category.count({ where: { ownerId: userId } });
+  }
+
   async delete(id: string): Promise<void> {
     try {
       // deleteMany: deleting a category that is already gone is not an error.

@@ -10,6 +10,8 @@ export interface CategoryRepository {
   findById(id: string): Promise<Category | null>;
   /** Global categories plus the ones owned by `userId`. */
   listVisibleTo(userId: string): Promise<Category[]>;
+  /** Number of personal categories owned by `userId` (globals are never counted). */
+  countOwnedBy(userId: string): Promise<number>;
   /** Throws `ConflictError` when expenses still reference the category (never deletes them). */
   delete(id: string): Promise<void>;
   /** True when at least one expense references the category. */

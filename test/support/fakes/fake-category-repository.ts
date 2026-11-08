@@ -26,6 +26,9 @@ export class FakeCategoryRepository implements CategoryRepository {
   async listVisibleTo(userId: string): Promise<Category[]> {
     return [...this.items.values()].filter((c) => c.isGlobal() || c.ownerId === userId);
   }
+  async countOwnedBy(userId: string): Promise<number> {
+    return [...this.items.values()].filter((c) => c.ownerId === userId).length;
+  }
   async delete(id: string): Promise<void> {
     if (await this.isInUse(id)) throw new ConflictError('Category is in use');
     this.items.delete(id);
