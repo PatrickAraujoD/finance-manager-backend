@@ -78,7 +78,8 @@ describe('invisible and spoofing Unicode', () => {
     it('accept a ZWJ emoji sequence', async () => {
       const res = await category(`${FAMILY} Familia`);
       expect(res.status).toBe(201);
-      expect(res.body.name).toBe(`${FAMILY} Familia`);
+      const stored = await t.prisma.client.category.findUnique({ where: { id: res.body.id } });
+      expect(stored?.name).toBe(`${FAMILY} Familia`);
     });
   });
 
