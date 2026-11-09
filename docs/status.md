@@ -17,6 +17,7 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
 | 9 | Relatorios (4 endpoints) | aprovada (correcoes de review: a9b6885, 09e14f7) |
 | 10 | Endurecimento e fechamento (matriz de autorizacao, README final) | feita (f5495c4); o fluxo manual com curl NAO foi feito, coberto pelo e2e `user-journey` |
 | - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps; workflow ainda NAO rodou no GitHub (`origin` sem push); imagem Docker construida e testada localmente (`docs/pipeline-status.md`) |
+| - | Forma de pagamento nas despesas (`paymentMethod`: `CREDIT`, `DEBIT`, `PIX`; obrigatoria; despesas antigas migradas como `PIX`) | feita na branch `feature/loans` |
 | - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens 1059 unit / 168 integration / 517 e2e |
 
 ## Decisoes-chave

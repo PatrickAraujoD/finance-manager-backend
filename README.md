@@ -243,7 +243,7 @@ nunca e salvo sozinho.
 
 ### Gastos (`/expenses`)
 
-Um gasto tem categoria, valor, data e, opcionalmente, um comprovante e uma descricao.
+Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um comprovante e uma descricao.
 
 **`POST /expenses`**. Registra um gasto.
 - Corpo:
@@ -251,6 +251,8 @@ Um gasto tem categoria, valor, data e, opcionalmente, um comprovante e uma descr
   - `amountCents` (inteiro de 1 a 1000000000): **sempre o valor que o usuario confirmou ou
     digitou**, mesmo quando ha comprovante e mesmo no gasto dividido (`paidAlone=false`);
   - `paidAlone` (booleano): se pagou sozinho ou dividiu;
+  - `paymentMethod` (obrigatorio): forma de pagamento, exatamente `CREDIT`, `DEBIT` ou `PIX`
+    (maiusculas; qualquer outro valor responde `400`);
   - `spentAt` (`YYYY-MM-DD`, data real do calendario, no maximo hoje + 1 dia em UTC);
   - `receiptId` (opcional, UUID de comprovante proprio; sem ele e um lancamento manual);
   - `description` (opcional, ate 500 caracteres).
@@ -261,14 +263,14 @@ Um gasto tem categoria, valor, data e, opcionalmente, um comprovante e uma descr
 
 **`GET /expenses`**. Lista os gastos do usuario, do mais recente para o mais antigo.
 - Query (todas opcionais): `from` e `to` (`YYYY-MM-DD`, inclusivos, `from <= to`), `categoryId`
-  (UUID), `limit` (1 a 200, padrao 100), `offset` (0 a 100000).
+  (UUID), `paymentMethod` (`CREDIT`, `DEBIT` ou `PIX`; valor invalido responde `400`), `limit` (1 a 200, padrao 100), `offset` (0 a 100000).
 - Resposta: `200 {"items": [...], "total": 42, "limit": 100, "offset": 0}`.
 
 **`GET /expenses/:id`**. Devolve um gasto.
-- Resposta: `200 {"id","categoryId","receiptId","amountCents","paidAlone","spentAt","description","createdAt"}`.
+- Resposta: `200 {"id","categoryId","receiptId","amountCents","paidAlone","paymentMethod","spentAt","description","createdAt"}`.
 
 **`PATCH /expenses/:id`**. Corrige um gasto (parcial).
-- Corpo: ao menos um entre `categoryId`, `amountCents`, `spentAt`, `description`, `paidAlone`.
+- Corpo: ao menos um entre `categoryId`, `amountCents`, `spentAt`, `description`, `paidAlone`, `paymentMethod`.
   `receiptId` nao pode mudar (400).
 - Resposta: `200` com o gasto atualizado.
 
