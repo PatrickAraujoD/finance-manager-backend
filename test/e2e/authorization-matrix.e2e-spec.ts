@@ -44,6 +44,8 @@ const ROUTES: Record<string, { kind: Kind; scope: Scope }> = {
   'GET /loans/:id': { kind: 'private', scope: 'by-id' },
   'PATCH /loans/:id': { kind: 'private', scope: 'by-id' },
   'DELETE /loans/:id': { kind: 'private', scope: 'by-id' },
+  'POST /loans/:id/payments': { kind: 'private', scope: 'by-id' },
+  'GET /loans/:id/payments': { kind: 'private', scope: 'by-id' },
   'GET /reports/by-category': { kind: 'private', scope: 'self' },
   'GET /reports/by-day': { kind: 'private', scope: 'self' },
   'GET /reports/monthly-evolution': { kind: 'private', scope: 'self' },
@@ -142,6 +144,8 @@ describe('authorization matrix', () => {
     'GET /loans/:id': (a) => withAuth(http().get(`/loans/${randomUUID()}`), a),
     'PATCH /loans/:id': (a) => withAuth(http().patch(`/loans/${randomUUID()}`), a).send({ borrowerName: 'X' }),
     'DELETE /loans/:id': (a) => withAuth(http().delete(`/loans/${randomUUID()}`), a),
+    'POST /loans/:id/payments': (a) => withAuth(http().post(`/loans/${randomUUID()}/payments`), a).send({}),
+    'GET /loans/:id/payments': (a) => withAuth(http().get(`/loans/${randomUUID()}/payments`), a),
     'GET /reports/by-category': (a) => withAuth(http().get(`/reports/by-category?month=${MONTH}`), a),
     'GET /reports/by-day': (a) => withAuth(http().get(`/reports/by-day?month=${MONTH}`), a),
     'GET /reports/monthly-evolution': (a) =>
@@ -307,6 +311,20 @@ describe('authorization matrix', () => {
     'DELETE /loans/:id': [
       { name: 'delete', call: (a, x) => withAuth(http().delete(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}`), a) },
     ],
+    'POST /loans/:id/payments': [
+      {
+        name: 'pay a foreign loan',
+        call: (a, x) =>
+          withAuth(http().post(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}/payments`), a).send({
+            amountCents: 100,
+            method: 'CASH',
+            paidAt: '2026-11-08',
+          }),
+      },
+    ],
+    'GET /loans/:id/payments': [
+      { name: 'list', call: (a, x) => withAuth(http().get(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}/payments`), a) },
+    ],
     'POST /loans': [
       {
         name: 'lend against a foreign expense',
@@ -380,6 +398,7 @@ describe('authorization matrix', () => {
       const loan = await t.prisma.client.loan.findUniqueOrThrow({ where: { id: w.bLoan } });
       expect([loan.borrowerName, Number(loan.amountCents), loan.userId]).toEqual(['Devedor da Bia', 7700, w.bia.id]);
       expect(await t.prisma.client.loan.count()).toBe(1);
+      expect(await t.prisma.client.loanPayment.count()).toBe(0);
     });
   });
 
