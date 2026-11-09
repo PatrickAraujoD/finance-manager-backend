@@ -71,7 +71,7 @@ function toTotals(lent: Money, paid: Money, upcoming: Money, overdue: Money): Lo
  * `borrowerName` ignoring letter case and spaces at the ends; the name shown is the one of the
  * OLDEST loan of the group (by `createdAt`; unknown or equal dates keep the first one given).
  *
- * Order: `overdueCents` descending, then name ascending. Past `maxPeople` the worst debtors stay
+ * Order: `overdueCents` descending, then name ascending (ignoring case). Past `maxPeople` the worst debtors stay
  * and `truncated` is true. The sums use `Money`, which throws on leaving the safe integer range
  * instead of returning a wrong number (each loan is at most 1e9 cents, so that takes millions).
  */

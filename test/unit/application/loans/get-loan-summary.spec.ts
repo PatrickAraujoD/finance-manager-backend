@@ -40,7 +40,7 @@ describe('GetLoanSummary', () => {
   it('summarizes per person from the real payments and the clock', async () => {
     const { summary, lend, cash } = await setup();
     const open = await lend(ana, 'Carlos', '2026-12-10', 5_000);
-    const late = await lend(ana, 'carlos ', '2026-11-01', 3_000);
+    const late = await lend(ana, ' Carlos ', '2026-11-01', 3_000);
     await lend(ana, 'Maria', '2026-11-08', 700);
     await cash(ana, open, 1_000);
     await cash(ana, late, 500);
