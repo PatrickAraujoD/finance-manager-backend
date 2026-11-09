@@ -9,12 +9,16 @@ import {
 import { UpdateExpense } from '../../../../src/application/use-cases/expenses/update-expense';
 import { Category } from '../../../../src/domain/entities/category';
 import { MAX_EXPENSE_CENTS } from '../../../../src/domain/entities/expense';
+import { LoanPayment } from '../../../../src/domain/entities/loan-payment';
 import { Receipt } from '../../../../src/domain/entities/receipt';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../src/domain/errors';
 import { Money } from '../../../../src/domain/money';
+import { loan } from '../../../support/loan-repository-contract';
 import { Role } from '../../../../src/domain/role';
 import { FakeCategoryRepository } from '../../../support/fakes/fake-category-repository';
 import { FakeExpenseRepository } from '../../../support/fakes/fake-expense-repository';
+import { FakeLoanPaymentRepository } from '../../../support/fakes/fake-loan-payment-repository';
+import { FakeLoanRepository } from '../../../support/fakes/fake-loan-repository';
 import { FakeReceiptRepository } from '../../../support/fakes/fake-receipt-repository';
 import { FixedClock } from '../../../support/fakes/fixed-clock';
 import { SequentialIdGenerator } from '../../../support/fakes/sequential-id-generator';
@@ -28,6 +32,8 @@ async function setup() {
   const expenses = new FakeExpenseRepository();
   const categories = new FakeCategoryRepository(expenses);
   const receipts = new FakeReceiptRepository();
+  const loans = new FakeLoanRepository();
+  const payments = new FakeLoanPaymentRepository(loans);
   const ids = new SequentialIdGenerator();
   const clock = new FixedClock();
   await categories.save(Category.create({ id: 'g-food', name: 'Food', ownerId: null }));
@@ -52,7 +58,9 @@ async function setup() {
   return {
     expenses,
     clock,
-    create: new CreateExpense(expenses, categories, receipts, ids, clock),
+    loans,
+    payments,
+    create: new CreateExpense(expenses, categories, receipts, ids, clock, payments),
     update: new UpdateExpense(expenses, categories, clock),
     remove: new DeleteExpense(expenses),
     get: new GetExpense(expenses),
@@ -132,6 +140,27 @@ describe('CreateExpense', () => {
     await expect(
       create.execute(admin, { ...valid, categoryId: 'ana-cat' }),
     ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('refuses a receipt that already backs a loan payment (ConflictError), not another one', async () => {
+    const { create, loans, payments, expenses } = await setup();
+    await loans.save(loan('l1', { userId: 'ana', cents: 5000 }));
+    await payments.add(
+      LoanPayment.create({
+        id: 'p1',
+        loanId: 'l1',
+        userId: 'ana',
+        amount: Money.fromCents(100),
+        method: 'PIX',
+        receiptId: 'r-ana',
+        paidAt: new Date('2026-11-08T00:00:00Z'),
+      }),
+    );
+    await expect(create.execute(ana, { ...valid, receiptId: 'r-ana' })).rejects.toBeInstanceOf(
+      ConflictError,
+    );
+    expect(expenses.all()).toHaveLength(0);
+    await expect(create.execute(ana, { ...valid, receiptId: 'r-ana-2' })).resolves.toBeDefined();
   });
 
   it('lets one receipt back only one expense (ConflictError)', async () => {
