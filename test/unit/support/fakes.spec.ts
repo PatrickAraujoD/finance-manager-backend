@@ -473,3 +473,25 @@ describe('FixedClock and SequentialIdGenerator', () => {
     expect([ids.next(), ids.next()]).toEqual(['id-1', 'id-2']);
   });
 });
+
+describe('FakeExpenseRepository.isReceiptUsed', () => {
+  it('is true only while an expense backs the receipt', async () => {
+    const repo = new FakeExpenseRepository();
+    await repo.save(
+      Expense.create({
+        id: 'e1',
+        userId: 'u1',
+        categoryId: 'c1',
+        receiptId: 'r1',
+        amount: Money.fromCents(100),
+        paidAlone: true,
+        paymentMethod: 'PIX',
+        spentAt: new Date('2026-11-01T00:00:00Z'),
+      }),
+    );
+    expect(await repo.isReceiptUsed('r1')).toBe(true);
+    expect(await repo.isReceiptUsed('r2')).toBe(false);
+    await repo.delete('u1', 'e1');
+    expect(await repo.isReceiptUsed('r1')).toBe(false);
+  });
+});

@@ -172,6 +172,13 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       ).rejects.toThrow();
     });
 
+    it('tells whether a receipt already backs an expense, whoever owns it', async () => {
+      expect(await repo.isReceiptUsed('r1')).toBe(false);
+      await repo.save(expense('e1', { receiptId: 'r1' }));
+      expect(await repo.isReceiptUsed('r1')).toBe(true);
+      expect(await repo.isReceiptUsed('r2')).toBe(false);
+    });
+
     it('frees the receipt after the expense is deleted', async () => {
       await repo.save(expense('e1', { receiptId: 'r1' }));
       expect(await repo.delete('u1', 'e1')).toBe(true);
