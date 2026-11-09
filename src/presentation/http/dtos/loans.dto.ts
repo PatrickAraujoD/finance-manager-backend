@@ -15,12 +15,14 @@ import {
   MAX_LOAN_PAGE,
   LoanStatusFilter,
 } from '../../../application/use-cases/loans/list-loans';
+import { LoanPaymentMethod } from '../../../domain/loan-payment-method';
 import { MAX_BORROWER_NAME } from '../../../domain/entities/loan';
 import { MAX_EXPENSE_CENTS } from '../../../domain/entities/expense';
 import { CleanText } from './clean-text.decorator';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 // Typed against the use case union so adding a status there forces this list to follow.
+const METHODS: readonly LoanPaymentMethod[] = ['CASH', 'PIX'];
 const STATUSES: readonly LoanStatusFilter[] = ['OPEN', 'PAID', 'OVERDUE'];
 const present = (_: unknown, value: unknown) => value !== undefined;
 
@@ -94,4 +96,28 @@ export class ListLoansQueryDto {
   @Min(0)
   @Max(MAX_LOAN_OFFSET)
   offset?: number;
+}
+
+/**
+ * Body of POST /loans/:id/payments. The loan comes from the path and the owner from the token,
+ * so `loanId`, `userId` and `id` are rejected as unknown fields. The use case checks that a PIX
+ * has a receipt, a CASH does not, and that `paidAt` is a real date in range.
+ */
+export class RegisterLoanPaymentDto {
+  @IsInt()
+  @Min(1)
+  @Max(MAX_EXPENSE_CENTS)
+  amountCents!: number;
+
+  @IsIn(METHODS)
+  method!: LoanPaymentMethod;
+
+  /** `YYYY-MM-DD` */
+  @IsString()
+  @Matches(DATE_SHAPE)
+  paidAt!: string;
+
+  @ValidateIf(present)
+  @IsUUID()
+  receiptId?: string;
 }

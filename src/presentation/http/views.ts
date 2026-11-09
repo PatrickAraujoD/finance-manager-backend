@@ -4,10 +4,12 @@ import { LoanDetails } from '../../application/use-cases/loans/get-loan';
 import { IncomeVsSpentReport } from '../../application/use-cases/reports/income-vs-spent';
 import { EvolutionReport } from '../../application/use-cases/reports/monthly-evolution';
 import { formatCalendarDate } from '../../domain/calendar-date';
+import { LoanPayment } from '../../domain/entities/loan-payment';
 import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
 import { LoanStatus } from '../../domain/loan-balance';
+import { LoanPaymentMethod } from '../../domain/loan-payment-method';
 import { PaymentMethod } from '../../domain/payment-method';
 import { Role } from '../../domain/role';
 
@@ -95,6 +97,30 @@ export function toLoanView({ loan, balance }: LoanDetails): LoanView {
     remainingCents: balance.remaining.cents,
     status: balance.status,
     createdAt: loan.createdAt,
+  };
+}
+
+export interface LoanPaymentView {
+  id: string;
+  loanId: string;
+  amountCents: number;
+  method: LoanPaymentMethod;
+  receiptId: string | null;
+  /** Calendar date, `YYYY-MM-DD`. */
+  paidAt: string;
+  createdAt: Date | null;
+}
+
+/** Explicit field list: `userId` and anything added to LoanPayment later never reach a response. */
+export function toLoanPaymentView(payment: LoanPayment): LoanPaymentView {
+  return {
+    id: payment.id,
+    loanId: payment.loanId,
+    amountCents: payment.amount.cents,
+    method: payment.method,
+    receiptId: payment.receiptId,
+    paidAt: formatCalendarDate(payment.paidAt),
+    createdAt: payment.createdAt,
   };
 }
 
