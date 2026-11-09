@@ -41,6 +41,7 @@ const ROUTES: Record<string, { kind: Kind; scope: Scope }> = {
   'DELETE /expenses/:id': { kind: 'private', scope: 'by-id' },
   'POST /loans': { kind: 'private', scope: 'by-id' },
   'GET /loans': { kind: 'private', scope: 'self' },
+  'GET /loans/summary': { kind: 'private', scope: 'self' },
   'GET /loans/:id': { kind: 'private', scope: 'by-id' },
   'PATCH /loans/:id': { kind: 'private', scope: 'by-id' },
   'DELETE /loans/:id': { kind: 'private', scope: 'by-id' },
@@ -141,6 +142,7 @@ describe('authorization matrix', () => {
     'DELETE /expenses/:id': (a) => withAuth(http().delete(`/expenses/${randomUUID()}`), a),
     'POST /loans': (a) => withAuth(http().post('/loans'), a).send({}),
     'GET /loans': (a) => withAuth(http().get('/loans'), a),
+    'GET /loans/summary': (a) => withAuth(http().get('/loans/summary'), a),
     'GET /loans/:id': (a) => withAuth(http().get(`/loans/${randomUUID()}`), a),
     'PATCH /loans/:id': (a) => withAuth(http().patch(`/loans/${randomUUID()}`), a).send({ borrowerName: 'X' }),
     'DELETE /loans/:id': (a) => withAuth(http().delete(`/loans/${randomUUID()}`), a),
@@ -440,6 +442,14 @@ describe('authorization matrix', () => {
       const byBorrower = await http().get('/loans?borrower=Devedor%20da%20Bia').set(...bearer(s));
       expect(byBorrower.body).toMatchObject({ items: [], total: 0 });
     },
+    'GET /loans/summary': async (s) => {
+      const res = await http().get('/loans/summary').set(...bearer(s));
+      expect(res.body.items).toEqual([]);
+      expect(res.body.totals.totalLentCents).toBe(0);
+      expect(JSON.stringify(res.body)).not.toContain('Devedor da Bia');
+      const byBorrower = await http().get('/loans/summary?borrower=Devedor%20da%20Bia').set(...bearer(s));
+      expect(byBorrower.body.items).toEqual([]);
+    },
     'GET /reports/by-category': async (s) => {
       const res = await http().get(`/reports/by-category?month=${MONTH}`).set(...bearer(s));
       expect(res.body).toEqual({ month: MONTH, totalCents: 0, items: [] });
@@ -469,6 +479,8 @@ describe('authorization matrix', () => {
       expect(list.body.total).toBe(1);
       const loans = await http().get('/loans').set(...bearer(w.bia));
       expect(loans.body.total).toBe(1);
+      const loanSummary = await http().get('/loans/summary').set(...bearer(w.bia));
+      expect(loanSummary.body.totals.totalLentCents).toBe(7700);
       const rep = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(w.bia));
       expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 4200 });
       expect(PASSWORD).toBeDefined();
