@@ -128,9 +128,12 @@ export function describeLoanRepositoryContract(
     it('treats SQL wildcards in the borrower filter as plain characters', async () => {
       await repo.save(loan('l1', { borrowerName: 'Carlos' }));
       await repo.save(loan('l2', { borrowerName: '100%_' }));
+      await repo.save(loan('l3', { borrowerName: 'a\\b' }));
       expect(await repo.listByUser('u1', { borrower: '%' })).toEqual([]);
       expect(await repo.listByUser('u1', { borrower: 'C_rlos' })).toEqual([]);
       expect((await repo.listByUser('u1', { borrower: '100%_' })).map((l) => l.id)).toEqual(['l2']);
+      expect((await repo.listByUser('u1', { borrower: 'A\\B' })).map((l) => l.id)).toEqual(['l3']);
+      expect(await repo.listByUser('u1', { borrower: 'a\\' })).toEqual([]);
     });
 
     it('deletes only the loan of the owner', async () => {

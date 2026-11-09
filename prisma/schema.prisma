@@ -34,6 +34,7 @@ model User {
   expenses      Expense[]
   incomes       MonthlyIncome[]
   receipts      Receipt[]
+  loans         Loan[]
 }
 
 model RefreshToken {
@@ -83,6 +84,7 @@ model Expense {
   user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   receipt       Receipt?      @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  loan          Loan?
 
   @@index([userId, spentAt])
   @@index([categoryId])
@@ -120,4 +122,25 @@ model Receipt {
   expense              Expense?
 
   @@index([userId])
+}
+
+// Money lent to someone. expenseId is UNIQUE: an expense turns into at most one loan (the amount is
+// copied from it); NULL for money lent directly, and Postgres treats NULLs as distinct. Restrict
+// on both sides: a user or an expense that has a loan cannot be deleted silently. CHECKs
+// (amountCents > 0 and the amount ceiling) live in the migration SQL.
+model Loan {
+  id           String   @id
+  userId       String
+  borrowerName String
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents  BigInt
+  // Calendar date (no time zone).
+  dueDate      DateTime @db.Date
+  expenseId    String?  @unique
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  expense      Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+
+  @@index([userId, dueDate])
+  @@index([userId, borrowerName])
 }
