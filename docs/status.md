@@ -1,6 +1,6 @@
 # Status do projeto (visao do CTO)
 
-Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
+Ultima atualizacao: 2026-11-09 (emprestimos e forma de pagamento; contagens refeitas). Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
 
 ## Quadro de tarefas
 
@@ -19,7 +19,38 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
 | - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps; workflow ainda NAO rodou no GitHub (`origin` sem push); imagem Docker construida e testada localmente (`docs/pipeline-status.md`) |
 | - | Forma de pagamento nas despesas (`paymentMethod`: `CREDIT`, `DEBIT`, `PIX`; obrigatoria; despesas antigas migradas como `PIX`) | feita na branch `feature/loans` |
 | - | Emprestimos (`/loans`: criar de um gasto ou em dinheiro, listar com filtros, ver, corrigir nome/vencimento, excluir; saldo e situacao `OPEN`/`PAID`/`OVERDUE` calculados no dominio). Pagamentos (`/loans/:id/payments`, dinheiro ou Pix com comprovante, soma travada no banco para nao passar do valor). Resumo por pessoa (`GET /loans/summary`: emprestado, pago, deve, a vencer, atrasado, proximo vencimento; teto de 500 pessoas com `truncated`) | feita na branch `feature/loans` |
-| - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens 1059 unit / 168 integration / 517 e2e |
+| - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens de 2026-11-09: 1424 unit / 219 integration passam e 1 falha conhecida (env-file, porta 3000 ocupada) de 220 / 725 e2e |
+
+## Emprestimos e forma de pagamento
+
+Entregue na branch `feature/loans` (3 migrations novas: `expense_payment_method`, `loans`,
+`loan_payments`):
+- `paymentMethod` obrigatorio nas despesas (`CREDIT`, `DEBIT`, `PIX`); as despesas antigas foram
+  migradas como `PIX`.
+- Emprestimos: criar a partir de uma despesa ou em dinheiro, listar, ver, corrigir nome/vencimento,
+  excluir (409 se tiver pagamentos; apagar uma despesa que virou emprestimo tambem responde 409).
+  Situacao `OPEN`/`PAID`/`OVERDUE` calculada no dominio; vencimento minimo `2000-01-01`.
+- Pagamentos por emprestimo: `CASH` sem comprovante, `PIX` com comprovante, nunca acima do saldo,
+  e um comprovante nao serve a despesa e ao pagamento ao mesmo tempo.
+- Resumo por pessoa (`GET /loans/summary`), teto de 500 pessoas com `truncated`.
+- A API passou de 25 para 33 rotas (README e `authorization-matrix` conferidos).
+
+Decisoes do usuario:
+- Cada compra paga para alguem vira um emprestimo proprio, vinculado a despesa.
+- Todo pagamento acontece dentro de um emprestimo especifico (nao ha pagamento "solto" por pessoa).
+- Atraso = vencido e com saldo.
+- Um pagamento pode ter data anterior ao cadastro do emprestimo.
+- Risco residual aceito: a corrida despesa x pagamento com o mesmo comprovante (ver "Requisitos
+  futuros").
+
+Dividas tecnicas conhecidas:
+- Listagem e resumo de emprestimos filtram e agrupam em memoria (ver "Requisitos futuros").
+- O backfill `PIX` das despesas antigas foi verificado so lendo o SQL da migration
+  (`ADD COLUMN ... DEFAULT 'PIX'` seguido de `DROP DEFAULT`); nao ha teste automatizado dele.
+- `tsc --noEmit` falha no commit `15671a2` do historico (verificado em 2026-11-09 num worktree
+  temporario: erros de aridade em `test/unit/application/loans/*.spec.ts`); a branch atual passa.
+  O motivo atribuido a um stash vem do registro do usuario e nao foi reverificado.
+- `test/integration/env-file.spec.ts` depende de a porta 3000 estar livre.
 
 ## Decisoes-chave
 
