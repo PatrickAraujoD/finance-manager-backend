@@ -1,0 +1,85 @@
+import { Loan, MAX_BORROWER_NAME } from '../../../src/domain/entities/loan';
+import { MAX_EXPENSE_CENTS } from '../../../src/domain/entities/expense';
+import { ValidationError } from '../../../src/domain/errors';
+import { Money } from '../../../src/domain/money';
+
+const base = {
+  id: 'l1',
+  userId: 'u1',
+  borrowerName: 'Carlos',
+  amount: Money.fromCents(5000),
+  dueDate: new Date('2026-12-10T00:00:00Z'),
+  expenseId: null,
+};
+
+describe('Loan', () => {
+  it('creates a loan and exposes every field', () => {
+    const loan = Loan.create({ ...base, expenseId: 'e1', createdAt: new Date('2026-11-09T10:00:00Z') });
+    expect(loan.id).toBe('l1');
+    expect(loan.userId).toBe('u1');
+    expect(loan.borrowerName).toBe('Carlos');
+    expect(loan.amount.cents).toBe(5000);
+    expect(loan.dueDate.toISOString()).toBe('2026-12-10T00:00:00.000Z');
+    expect(loan.expenseId).toBe('e1');
+    expect(loan.createdAt?.toISOString()).toBe('2026-11-09T10:00:00.000Z');
+  });
+
+  it('has no createdAt until persisted', () => {
+    expect(Loan.create(base).createdAt).toBeNull();
+  });
+
+  it('trims the borrower name', () => {
+    expect(Loan.create({ ...base, borrowerName: '  Carlos  ' }).borrowerName).toBe('Carlos');
+  });
+
+  it('normalizes the due date to 00:00 UTC', () => {
+    const loan = Loan.create({ ...base, dueDate: new Date('2026-12-10T18:30:00Z') });
+    expect(loan.dueDate.toISOString()).toBe('2026-12-10T00:00:00.000Z');
+  });
+
+  it('returns copies of the dates, so callers cannot mutate the loan', () => {
+    const loan = Loan.create({ ...base, createdAt: new Date('2026-11-09T10:00:00Z') });
+    loan.dueDate.setUTCFullYear(1999);
+    loan.createdAt?.setUTCFullYear(1999);
+    expect(loan.dueDate.getUTCFullYear()).toBe(2026);
+    expect(loan.createdAt?.getUTCFullYear()).toBe(2026);
+  });
+
+  it.each(['id', 'userId'] as const)('rejects a blank %s', (field) => {
+    expect(() => Loan.create({ ...base, [field]: ' ' })).toThrow(ValidationError);
+  });
+
+  it('rejects a blank expenseId (null is the way to say "none")', () => {
+    expect(() => Loan.create({ ...base, expenseId: ' ' })).toThrow(ValidationError);
+  });
+
+  it.each(['', '   ', 'Car\u0000los', 'Car‮los'])('rejects the borrower name %j', (name) => {
+    expect(() => Loan.create({ ...base, borrowerName: name })).toThrow(ValidationError);
+  });
+
+  it('accepts a name of exactly the maximum length and rejects one more', () => {
+    expect(() => Loan.create({ ...base, borrowerName: 'a'.repeat(MAX_BORROWER_NAME) })).not.toThrow();
+    expect(() => Loan.create({ ...base, borrowerName: 'a'.repeat(MAX_BORROWER_NAME + 1) })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('keeps the name limit at 100 characters', () => {
+    expect(MAX_BORROWER_NAME).toBe(100);
+  });
+
+  it.each([0, -1])('rejects the amount %d', (cents) => {
+    expect(() => Loan.create({ ...base, amount: Money.fromCents(cents) })).toThrow(ValidationError);
+  });
+
+  it('accepts the ceiling and rejects one cent above it', () => {
+    expect(() => Loan.create({ ...base, amount: Money.fromCents(MAX_EXPENSE_CENTS) })).not.toThrow();
+    expect(() => Loan.create({ ...base, amount: Money.fromCents(MAX_EXPENSE_CENTS + 1) })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('rejects an invalid due date', () => {
+    expect(() => Loan.create({ ...base, dueDate: new Date('nope') })).toThrow(ValidationError);
+  });
+});
