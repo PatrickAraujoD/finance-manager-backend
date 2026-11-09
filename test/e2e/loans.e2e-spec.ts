@@ -163,9 +163,9 @@ describe('loans endpoints', () => {
     });
 
     it('filters by status', async () => {
-      expect(names(await list(ana, '?status=overdue'))).toEqual(['carlos']);
-      expect(names(await list(ana, '?status=open'))).toEqual(['Maria', 'Carlos']);
-      expect((await list(ana, '?status=paid')).body).toMatchObject({ items: [], total: 0 });
+      expect(names(await list(ana, '?status=OVERDUE'))).toEqual(['carlos']);
+      expect(names(await list(ana, '?status=OPEN'))).toEqual(['Maria', 'Carlos']);
+      expect((await list(ana, '?status=PAID')).body).toMatchObject({ items: [], total: 0 });
     });
 
     it('pages with limit and offset', async () => {
@@ -176,7 +176,8 @@ describe('loans endpoints', () => {
 
     it.each([
       '?status=late',
-      '?status=OPEN',
+      '?status=open',
+      '?status=overdue',
       '?limit=0',
       '?limit=201',
       '?limit=abc',

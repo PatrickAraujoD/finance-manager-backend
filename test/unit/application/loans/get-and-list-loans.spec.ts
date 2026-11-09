@@ -107,11 +107,11 @@ describe('ListLoans', () => {
     await create.execute(ana, lend('Past', '2026-11-07'));
     await create.execute(ana, lend('Today', '2026-11-08'));
     await create.execute(ana, lend('Future', '2026-12-01'));
-    const names = async (status: 'open' | 'paid' | 'overdue') =>
+    const names = async (status: 'OPEN' | 'PAID' | 'OVERDUE') =>
       (await list.execute(ana, { status })).items.map((i) => i.loan.borrowerName);
-    expect(await names('overdue')).toEqual(['Past']);
-    expect(await names('open')).toEqual(['Today', 'Future']);
-    expect(await names('paid')).toEqual([]);
+    expect(await names('OVERDUE')).toEqual(['Past']);
+    expect(await names('OPEN')).toEqual(['Today', 'Future']);
+    expect(await names('PAID')).toEqual([]);
   });
 
   it('combines the borrower and status filters', async () => {
@@ -119,7 +119,7 @@ describe('ListLoans', () => {
     await create.execute(ana, lend('Carlos', '2026-11-07'));
     await create.execute(ana, lend('Carlos', '2026-12-07'));
     await create.execute(ana, lend('Maria', '2026-11-07'));
-    const page = await list.execute(ana, { borrower: 'carlos', status: 'overdue' });
+    const page = await list.execute(ana, { borrower: 'carlos', status: 'OVERDUE' });
     expect(page.items.map((i) => i.loan.dueDate.toISOString().slice(0, 10))).toEqual(['2026-11-07']);
     expect(page.total).toBe(1);
   });
@@ -142,8 +142,9 @@ describe('ListLoans', () => {
     { limit: 1.5 },
     { offset: -1 },
     { offset: MAX_LOAN_OFFSET + 1 },
-    { status: 'late' },
-    { status: 'OPEN' },
+    { status: 'LATE' },
+    { status: 'open' },
+    { status: 'Overdue' },
     { borrower: '' },
     { borrower: '   ' },
     { borrower: 'Car\u0000los' },
