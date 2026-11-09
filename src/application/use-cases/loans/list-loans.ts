@@ -1,13 +1,12 @@
 import { ValidationError } from '../../../domain/errors';
 import { LoanStatus } from '../../../domain/loan-balance';
-import { Money } from '../../../domain/money';
-import { requireCleanText } from '../../../domain/validation';
 import { Actor } from '../../actor';
 import { Clock } from '../../ports/clock';
 import { LoanPaymentRepository } from '../../ports/loan-payment-repository';
-import { LoanFilter, LoanRepository } from '../../ports/loan-repository';
+import { LoanRepository } from '../../ports/loan-repository';
 import { toInt } from '../paging';
-import { LoanDetails, withBalance } from './get-loan';
+import { LoanDetails } from './get-loan';
+import { loadLoanDetails, toLoanFilter } from './load-loan-details';
 
 export const DEFAULT_LOAN_PAGE = 100;
 export const MAX_LOAN_PAGE = 200;
@@ -50,14 +49,7 @@ export class ListLoans {
   ) {}
 
   async execute(actor: Actor, input: ListLoansInput): Promise<LoanPageResult> {
-    const filter: LoanFilter = {};
-    if (input.borrower !== undefined) {
-      if (typeof input.borrower !== 'string' || input.borrower.trim() === '') {
-        throw new ValidationError('borrower must be a non blank text');
-      }
-      requireCleanText(input.borrower, 'borrower', { kind: 'name' });
-      filter.borrower = input.borrower.trim();
-    }
+    const filter = toLoanFilter(input.borrower);
     let status: LoanStatus | undefined;
     if (input.status !== undefined) {
       if (!STATUSES.includes(input.status)) {
@@ -69,14 +61,14 @@ export class ListLoans {
     const offset = toInt(input.offset, 'offset', 0, MAX_LOAN_OFFSET, 0);
 
     const now = this.clock.now();
-    const found = await this.loans.listByUser(actor.id, filter);
-    const paid = await this.payments.sumPaidByLoans(
-      actor.id,
-      found.map((loan) => loan.id),
+    const all = (await loadLoanDetails(this.loans, this.payments, actor, filter, now)).filter(
+      (details) => status === undefined || details.balance.status === status,
     );
-    const all = found
-      .map((loan) => withBalance(loan, Money.fromCents(paid.get(loan.id) ?? 0), now))
-      .filter((details) => status === undefined || details.balance.status === status);
-    return { items: all.slice(offset, offset + limit), total: all.length, limit, offset };
+    return {
+      items: all.slice(offset, offset + limit),
+      total: all.length,
+      limit,
+      offset,
+    };
   }
 }
