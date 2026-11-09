@@ -236,6 +236,25 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       expect(await prisma.client.receipt.count({ where: { id: 'r1' } })).toBe(1);
       expect(await prisma.client.category.count({ where: { id: 'c1' } })).toBe(1);
     });
+
+    it('refuses to delete an expense that backs a loan (ConflictError from the P2003 FK)', async () => {
+      await repo.save(expense('e1'));
+      await prisma.client.loan.create({
+        data: {
+          id: 'l1',
+          userId: 'u1',
+          borrowerName: 'Carlos',
+          amountCents: 1050n,
+          dueDate: day('2026-12-10'),
+          expenseId: 'e1',
+        },
+      });
+      await expect(repo.delete('u1', 'e1')).rejects.toBeInstanceOf(ConflictError);
+      expect(await repo.findById('u1', 'e1')).not.toBeNull();
+      // Once the loan is gone the expense can be deleted again.
+      await prisma.client.loan.delete({ where: { id: 'l1' } });
+      expect(await repo.delete('u1', 'e1')).toBe(true);
+    });
   });
 
   describe('listing', () => {
