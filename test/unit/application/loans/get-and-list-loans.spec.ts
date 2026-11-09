@@ -14,8 +14,8 @@ async function setup() {
   return {
     ...world,
     create: new CreateLoan(world.loans, world.expenses, world.ids),
-    get: new GetLoan(world.loans, world.clock),
-    list: new ListLoans(world.loans, world.clock),
+    get: new GetLoan(world.loans, world.payments, world.clock),
+    list: new ListLoans(world.loans, world.payments, world.clock),
   };
 }
 

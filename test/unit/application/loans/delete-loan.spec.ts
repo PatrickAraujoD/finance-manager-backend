@@ -11,7 +11,7 @@ async function setup() {
     dueDate: '2026-12-10',
     expenseId: 'e-ana',
   });
-  return { ...world, id, create, remove: new DeleteLoan(world.loans) };
+  return { ...world, id, create, remove: new DeleteLoan(world.loans, world.payments) };
 }
 
 describe('DeleteLoan', () => {

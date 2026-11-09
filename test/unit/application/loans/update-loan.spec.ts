@@ -11,7 +11,7 @@ async function setup() {
     dueDate: '2026-12-10',
     expenseId: 'e-ana',
   });
-  return { ...world, id, update: new UpdateLoan(world.loans, world.clock) };
+  return { ...world, id, update: new UpdateLoan(world.loans, world.payments, world.clock) };
 }
 
 describe('UpdateLoan', () => {
