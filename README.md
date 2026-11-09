@@ -113,6 +113,11 @@ devolve.
 | GET | `/expenses/:id` | N, A | Ver um gasto |
 | PATCH | `/expenses/:id` | N, A | Corrigir um gasto |
 | DELETE | `/expenses/:id` | N, A | Excluir um gasto |
+| POST | `/loans` | N, A | Registrar um emprestimo (de um gasto ou em dinheiro) |
+| GET | `/loans` | N, A | Listar emprestimos com filtros e paginacao |
+| GET | `/loans/:id` | N, A | Ver um emprestimo com pago, saldo e situacao |
+| PATCH | `/loans/:id` | N, A | Corrigir o nome ou o vencimento |
+| DELETE | `/loans/:id` | N, A | Excluir um emprestimo |
 | GET | `/reports/by-category` | N, A | Grafico: para onde vai o dinheiro |
 | GET | `/reports/by-day` | N, A | Grafico: gasto por dia e dia de maior gasto |
 | GET | `/reports/monthly-evolution` | N, A | Grafico: evolucao mes a mes |
@@ -278,8 +283,52 @@ Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um com
 **`DELETE /expenses/:id`**. Exclui um gasto.
 - Resposta: `204`. O comprovante e o arquivo continuam guardados e o comprovante volta a poder ser
   usado em outro gasto.
+- Erro: `409` se o gasto ja virou um emprestimo (exclua o emprestimo antes).
 
 Em `GET`, `PATCH` e `DELETE`, um gasto inexistente ou de outro usuario responde `404`.
+
+### Emprestimos (`/loans`)
+
+Um emprestimo e dinheiro que o usuario deixou com alguem. Cada emprestimo tem o nome da pessoa
+(`borrowerName`), um valor e um vencimento proprios; uma mesma pessoa pode ter varios e nao ha
+parcelas. Ele pode nascer de um gasto ja registrado (uma compra paga para outra pessoa; o valor
+vem do gasto e cada gasto gera no maximo um emprestimo) ou ser dinheiro emprestado direto, com o
+valor informado. As pessoas nao tem cadastro: o nome e so um texto. Pagamentos ainda nao existem,
+entao hoje `paidCents` e sempre `0`.
+
+**`POST /loans`**. Registra um emprestimo.
+- Corpo:
+  - `borrowerName`: nome da pessoa, de 1 a 100 caracteres;
+  - `dueDate` (`YYYY-MM-DD`, data real do calendario, a partir de `2000-01-01`): pode estar no
+    passado, para registrar uma divida antiga;
+  - **exatamente um** entre `expenseId` (UUID de um gasto proprio; o valor e o do gasto) e
+    `amountCents` (inteiro de 1 a 1000000000). Os dois, ou nenhum, respondem `400`.
+- Resposta: `201 {"id": "<uuid>"}`.
+- Erros: `404` gasto inexistente ou de outro usuario; `409` o gasto ja tem um emprestimo; `400`
+  campo invalido ou extra (`userId`, `id`...).
+
+**`GET /loans`**. Lista os emprestimos do usuario, do vencimento mais proximo para o mais distante.
+- Query (todas opcionais): `borrower` (nome exato, sem diferenca de maiusculas e minusculas nem de
+  espacos nas pontas), `status` (`open`, `paid` ou `overdue`), `limit` (1 a 200, padrao 100),
+  `offset` (0 a 100000). Valor invalido responde `400`.
+- Resposta: `200 {"items": [...], "total": 3, "limit": 100, "offset": 0}`; `total` conta todos os
+  que passam nos filtros.
+
+**`GET /loans/:id`**. Devolve um emprestimo.
+- Resposta: `200 {"id","borrowerName","amountCents","dueDate","expenseId","paidCents","remainingCents","status","createdAt"}`.
+  `expenseId` e `null` no dinheiro emprestado direto. `status` e `PAID` (saldo zero), `OVERDUE`
+  (ha saldo e o vencimento ja passou) ou `OPEN` (ha saldo e vence hoje ou depois). Vencer hoje
+  ainda e `OPEN`; o dia e o de calendario em UTC.
+
+**`PATCH /loans/:id`**. Corrige um emprestimo (parcial).
+- Corpo: ao menos um entre `borrowerName` e `dueDate`. O valor e o gasto de origem nao mudam (400).
+- Resposta: `200` com o emprestimo atualizado.
+
+**`DELETE /loans/:id`**. Exclui um emprestimo. Resposta: `204`. O gasto de origem continua e volta
+a poder gerar outro emprestimo.
+
+Em `GET`, `PATCH` e `DELETE`, um emprestimo inexistente ou de outro usuario (admin incluso)
+responde `404`.
 
 ### Relatorios (`/reports`)
 
