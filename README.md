@@ -62,7 +62,7 @@ node scripts/check-secrets.js       # falha se um .env ou segredo obvio estiver 
 
 ## Endpoints
 
-A API tem 25 rotas, todas em JSON (exceto o upload `multipart/form-data` e o download do
+A API tem 33 rotas, todas em JSON (exceto o upload `multipart/form-data` e o download do
 comprovante). Esta secao e a referencia completa: o que cada rota faz, o que ela recebe e o que
 devolve.
 
