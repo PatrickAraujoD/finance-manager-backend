@@ -117,7 +117,9 @@ devolve.
 | GET | `/loans` | N, A | Listar emprestimos com filtros e paginacao |
 | GET | `/loans/:id` | N, A | Ver um emprestimo com pago, saldo e situacao |
 | PATCH | `/loans/:id` | N, A | Corrigir o nome ou o vencimento |
-| DELETE | `/loans/:id` | N, A | Excluir um emprestimo |
+| DELETE | `/loans/:id` | N, A | Excluir um emprestimo (409 se tiver pagamentos) |
+| POST | `/loans/:id/payments` | N, A | Registrar um pagamento (dinheiro ou Pix com comprovante) |
+| GET | `/loans/:id/payments` | N, A | Listar os pagamentos de um emprestimo |
 | GET | `/reports/by-category` | N, A | Grafico: para onde vai o dinheiro |
 | GET | `/reports/by-day` | N, A | Grafico: gasto por dia e dia de maior gasto |
 | GET | `/reports/monthly-evolution` | N, A | Grafico: evolucao mes a mes |
@@ -293,8 +295,9 @@ Um emprestimo e dinheiro que o usuario deixou com alguem. Cada emprestimo tem o 
 (`borrowerName`), um valor e um vencimento proprios; uma mesma pessoa pode ter varios e nao ha
 parcelas. Ele pode nascer de um gasto ja registrado (uma compra paga para outra pessoa; o valor
 vem do gasto e cada gasto gera no maximo um emprestimo) ou ser dinheiro emprestado direto, com o
-valor informado. As pessoas nao tem cadastro: o nome e so um texto. Pagamentos ainda nao existem,
-entao hoje `paidCents` e sempre `0`.
+valor informado. As pessoas nao tem cadastro: o nome e so um texto. Cada pagamento pertence a UM
+emprestimo (o usuario informa qual) e `paidCents`, `remainingCents` e `status` saem da soma real
+dos pagamentos, calculada numa unica consulta agregada.
 
 **`POST /loans`**. Registra um emprestimo.
 - Corpo:
@@ -325,10 +328,35 @@ entao hoje `paidCents` e sempre `0`.
 - Resposta: `200` com o emprestimo atualizado.
 
 **`DELETE /loans/:id`**. Exclui um emprestimo. Resposta: `204`. O gasto de origem continua e volta
-a poder gerar outro emprestimo.
+a poder gerar outro emprestimo. Erro: `409` se o emprestimo ja tem pagamentos (o historico fica).
+
+**`POST /loans/:id/payments`**. Registra um pagamento do emprestimo.
+- Corpo:
+  - `amountCents`: inteiro de 1 a 1000000000, o valor pago;
+  - `method`: `CASH` (dinheiro fisico, valor digitado a mao, sem comprovante) ou `PIX`;
+  - `paidAt` (`YYYY-MM-DD`): de `2000-01-01` ate hoje + 1 dia (UTC), a mesma folga dos gastos;
+  - `receiptId` (UUID): **obrigatorio** em `PIX` e **proibido** em `CASH`. E o comprovante enviado
+    antes por `POST /receipts`; o valor sugerido pelo comprovante nunca e usado, vale o `amountCents`.
+- Regras: o pagamento nao pode passar do saldo restante (`400` com o saldo na mensagem); pagar o
+  saldo exato quita o emprestimo (`status` `PAID`, mesmo se estava atrasado). Duas requisicoes
+  simultaneas que somadas passam do valor nao passam as duas: o banco trava o emprestimo durante a
+  gravacao e recalcula a soma. Um comprovante serve a um unico pagamento ou gasto, nunca a dois
+  (`409`).
+- Resposta: `201 {"id": "<uuid>"}`.
+- Erros: `404` emprestimo inexistente ou de outro usuario (admin incluso), comprovante inexistente
+  ou de outro usuario (identicos); `409` comprovante ja usado por outro pagamento ou por um gasto;
+  `400` campo invalido, extra (`userId`, `loanId`, `id`...), `PIX` sem comprovante, `CASH` com
+  comprovante ou pagamento acima do saldo.
+
+**`GET /loans/:id/payments`**. Lista os pagamentos do emprestimo, do mais antigo para o mais novo
+(por `paidAt`, depois `id`).
+- Resposta: `200` com uma lista de `{"id","loanId","amountCents","method","receiptId","paidAt","createdAt"}`.
+  `receiptId` e `null` em `CASH`. Nunca traz `userId`.
+
+Criar um gasto com um comprovante que ja serve a um pagamento de emprestimo responde `409`.
 
 Em `GET`, `PATCH` e `DELETE`, um emprestimo inexistente ou de outro usuario (admin incluso)
-responde `404`.
+responde `404`; o mesmo vale para os dois endpoints de pagamentos.
 
 ### Relatorios (`/reports`)
 
