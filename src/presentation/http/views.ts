@@ -1,11 +1,13 @@
 import { CategoryReport } from '../../application/use-cases/reports/by-category';
 import { DayReport } from '../../application/use-cases/reports/by-day';
+import { LoanDetails } from '../../application/use-cases/loans/get-loan';
 import { IncomeVsSpentReport } from '../../application/use-cases/reports/income-vs-spent';
 import { EvolutionReport } from '../../application/use-cases/reports/monthly-evolution';
 import { formatCalendarDate } from '../../domain/calendar-date';
 import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
+import { LoanStatus } from '../../domain/loan-balance';
 import { PaymentMethod } from '../../domain/payment-method';
 import { Role } from '../../domain/role';
 
@@ -65,6 +67,34 @@ export function toExpenseView(expense: Expense): ExpenseView {
     spentAt: formatCalendarDate(expense.spentAt),
     description: expense.description ?? null,
     createdAt: expense.createdAt,
+  };
+}
+
+export interface LoanView {
+  id: string;
+  borrowerName: string;
+  amountCents: number;
+  /** Calendar date, `YYYY-MM-DD`. */
+  dueDate: string;
+  expenseId: string | null;
+  paidCents: number;
+  remainingCents: number;
+  status: LoanStatus;
+  createdAt: Date | null;
+}
+
+/** Explicit field list: `userId` and anything added to Loan later never reach a response. */
+export function toLoanView({ loan, balance }: LoanDetails): LoanView {
+  return {
+    id: loan.id,
+    borrowerName: loan.borrowerName,
+    amountCents: loan.amount.cents,
+    dueDate: formatCalendarDate(loan.dueDate),
+    expenseId: loan.expenseId,
+    paidCents: balance.paid.cents,
+    remainingCents: balance.remaining.cents,
+    status: balance.status,
+    createdAt: loan.createdAt,
   };
 }
 

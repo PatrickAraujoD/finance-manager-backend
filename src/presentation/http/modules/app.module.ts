@@ -19,6 +19,7 @@ import { CategoriesModule } from './categories.module';
 import { CoreModule } from './core.module';
 import { ExpensesModule } from './expenses.module';
 import { IncomeModule } from './income.module';
+import { LoansModule } from './loans.module';
 import { ReceiptsModule } from './receipts.module';
 import { ReportsModule } from './reports.module';
 import { UsersModule } from './users.module';
@@ -36,6 +37,7 @@ export class AppModule {
         CategoriesModule,
         ExpensesModule,
         IncomeModule,
+        LoansModule,
         ReceiptsModule,
         ReportsModule,
         ThrottlerModule.forRootAsync({
