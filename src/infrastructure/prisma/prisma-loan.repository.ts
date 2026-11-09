@@ -102,7 +102,13 @@ export class PrismaLoanRepository implements LoanRepository {
   }
 
   async delete(userId: string, id: string): Promise<boolean> {
-    const result = await this.prisma.client.loan.deleteMany({ where: { id, userId } });
-    return result.count > 0;
+    try {
+      const result = await this.prisma.client.loan.deleteMany({ where: { id, userId } });
+      return result.count > 0;
+    } catch (error) {
+      // FK Restrict: payments were made toward this loan and still point at it.
+      if (errorCode(error) === 'P2003') throw new ConflictError('Loan has payments');
+      throw error;
+    }
   }
 }

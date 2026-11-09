@@ -18,6 +18,11 @@ enum PaymentMethod {
   PIX
 }
 
+enum LoanPaymentMethod {
+  CASH
+  PIX
+}
+
 model User {
   id            String          @id
   name          String
@@ -35,6 +40,7 @@ model User {
   incomes       MonthlyIncome[]
   receipts      Receipt[]
   loans         Loan[]
+  loanPayments  LoanPayment[]
 }
 
 model RefreshToken {
@@ -120,6 +126,7 @@ model Receipt {
   createdAt            DateTime @default(now())
   user                 User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expense              Expense?
+  loanPayment          LoanPayment?
 
   @@index([userId])
 }
@@ -140,7 +147,33 @@ model Loan {
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expense      Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  payments     LoanPayment[]
 
   @@index([userId, dueDate])
   @@index([userId, borrowerName])
+}
+
+// A payment toward one specific loan. receiptId is UNIQUE: one receipt backs at most one payment
+// (the code also refuses a receipt that backs an expense); NULL for cash, and Postgres treats
+// NULLs as distinct. Restrict everywhere: a loan, a user or a receipt that has payments cannot be
+// deleted silently. CHECKs (amountCents > 0, the amount ceiling, and PIX <=> receipt) live in the
+// migration SQL. The sum of a loan's payments never passing its amount is enforced in code under
+// a row lock on the loan (see PrismaLoanPaymentRepository.add).
+model LoanPayment {
+  id          String            @id
+  loanId      String
+  userId      String
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents BigInt
+  method      LoanPaymentMethod
+  receiptId   String?           @unique
+  // Calendar date (no time zone).
+  paidAt      DateTime          @db.Date
+  createdAt   DateTime          @default(now())
+  loan        Loan              @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  receipt     Receipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([loanId, paidAt])
+  @@index([userId])
 }
