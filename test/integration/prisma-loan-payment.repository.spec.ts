@@ -58,11 +58,12 @@ describe('PrismaLoanPaymentRepository (Postgres specifics)', () => {
     });
 
   it('stores the amount as BIGINT and the date as a plain DATE', async () => {
-    await repo.add(payment('p1', { cents: 987_654, paidAt: '2026-02-28' }));
+    await loans.save(loan('big', { cents: 1_000_000_000 }));
+    await repo.add(payment('p1', { loanId: 'big', cents: 987_654_321, paidAt: '2026-02-28' }));
     const [row] = await prisma.client.$queryRawUnsafe<{ amountCents: bigint; paidAt: string }[]>(
       `SELECT "amountCents", "paidAt"::text AS "paidAt" FROM "LoanPayment"`,
     );
-    expect(row.amountCents).toBe(987_654n);
+    expect(row.amountCents).toBe(987_654_321n);
     expect(row.paidAt).toBe('2026-02-28');
   });
 
