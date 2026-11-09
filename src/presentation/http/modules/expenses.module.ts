@@ -3,6 +3,7 @@ import { CategoryRepository } from '../../../application/ports/category-reposito
 import { Clock } from '../../../application/ports/clock';
 import { ExpenseRepository } from '../../../application/ports/expense-repository';
 import { IdGenerator } from '../../../application/ports/id-generator';
+import { LoanPaymentRepository } from '../../../application/ports/loan-payment-repository';
 import { ReceiptRepository } from '../../../application/ports/receipt-repository';
 import { CreateExpense } from '../../../application/use-cases/expenses/create-expense';
 import { DeleteExpense } from '../../../application/use-cases/expenses/delete-expense';
@@ -15,6 +16,7 @@ import {
   CLOCK,
   EXPENSE_REPOSITORY,
   ID_GENERATOR,
+  LOAN_PAYMENT_REPOSITORY,
   RECEIPT_REPOSITORY,
 } from '../tokens';
 
@@ -23,14 +25,22 @@ import {
   providers: [
     {
       provide: CreateExpense,
-      inject: [EXPENSE_REPOSITORY, CATEGORY_REPOSITORY, RECEIPT_REPOSITORY, ID_GENERATOR, CLOCK],
+      inject: [
+        EXPENSE_REPOSITORY,
+        CATEGORY_REPOSITORY,
+        RECEIPT_REPOSITORY,
+        ID_GENERATOR,
+        CLOCK,
+        LOAN_PAYMENT_REPOSITORY,
+      ],
       useFactory: (
         expenses: ExpenseRepository,
         categories: CategoryRepository,
         receipts: ReceiptRepository,
         ids: IdGenerator,
         clock: Clock,
-      ) => new CreateExpense(expenses, categories, receipts, ids, clock),
+        loanPayments: LoanPaymentRepository,
+      ) => new CreateExpense(expenses, categories, receipts, ids, clock, loanPayments),
     },
     {
       provide: UpdateExpense,
