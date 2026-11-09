@@ -91,6 +91,23 @@ describe('PrismaLoanRepository (Postgres specifics)', () => {
     expect(await expenses.delete('u1', 'e2')).toBe(true);
   });
 
+  it('answers ConflictError when a payment lands right after the check (foreign key race)', async () => {
+    await repo.save(loan('l1'));
+    // Written straight to the table, as a payment racing past DeleteLoan's "no payments" check.
+    await prisma.client.loanPayment.create({
+      data: {
+        id: 'p1',
+        loanId: 'l1',
+        userId: 'u1',
+        amountCents: 100n,
+        method: 'CASH',
+        paidAt: new Date('2026-11-08T00:00:00Z'),
+      },
+    });
+    await expect(repo.delete('u1', 'l1')).rejects.toBeInstanceOf(ConflictError);
+    expect(await repo.findById('u1', 'l1')).not.toBeNull();
+  });
+
   it('keeps a user that has loans (Restrict)', async () => {
     await repo.save(loan('l1'));
     await expect(prisma.client.user.delete({ where: { id: 'u1' } })).rejects.toThrow();
