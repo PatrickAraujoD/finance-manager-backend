@@ -26,9 +26,9 @@ export interface ExpenseRepository {
    */
   save(expense: Expense): Promise<void>;
   /**
-   * Updates category, amount, paidAlone, paymentMethod, spentAt and description of the expense with this id AND
-   * this owner. `userId` and `receiptId` are never changed. Returns false when there is no such
-   * row. Throws `NotFoundError` when the new category does not exist.
+   * Updates category, amount, paidAlone, paymentMethod, spentAt and description of the expense
+   * with this id AND this owner. `userId` and `receiptId` are never changed. Returns false when
+   * there is no such row. Throws `NotFoundError` when the new category does not exist.
    */
   update(expense: Expense): Promise<boolean>;
   /** Only returns the expense when it belongs to `userId`. */

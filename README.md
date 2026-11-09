@@ -263,7 +263,8 @@ Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um com
 
 **`GET /expenses`**. Lista os gastos do usuario, do mais recente para o mais antigo.
 - Query (todas opcionais): `from` e `to` (`YYYY-MM-DD`, inclusivos, `from <= to`), `categoryId`
-  (UUID), `paymentMethod` (`CREDIT`, `DEBIT` ou `PIX`; valor invalido responde `400`), `limit` (1 a 200, padrao 100), `offset` (0 a 100000).
+  (UUID), `paymentMethod` (`CREDIT`, `DEBIT` ou `PIX`; valor invalido responde `400`), `limit`
+  (1 a 200, padrao 100), `offset` (0 a 100000).
 - Resposta: `200 {"items": [...], "total": 42, "limit": 100, "offset": 0}`.
 
 **`GET /expenses/:id`**. Devolve um gasto.

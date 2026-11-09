@@ -34,9 +34,8 @@ export class UpdateExpense {
 
   async execute(actor: Actor, id: string, input: UpdateExpenseInput): Promise<Expense> {
     const { categoryId, amountCents, spentAt, description, paidAlone, paymentMethod } = input;
-    if ([categoryId, amountCents, spentAt, description, paidAlone, paymentMethod].every(
-        (v) => v === undefined,
-      )) {
+    const fields = [categoryId, amountCents, spentAt, description, paidAlone, paymentMethod];
+    if (fields.every((v) => v === undefined)) {
       throw new ValidationError('At least one field is required');
     }
     const amount = amountCents === undefined ? undefined : toAmount(amountCents);
