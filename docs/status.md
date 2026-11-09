@@ -95,7 +95,10 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
 - **Comprovante entre gasto e pagamento nao e unico no banco:** cada tabela garante
   `UNIQUE(receiptId)` e o codigo recusa (409) o comprovante que ja serve a outra tabela, mas ha
   uma janela minuscula se um gasto e um pagamento com o MESMO comprovante forem gravados no mesmo
-  instante. Opcao futura: tabela unica de uso de comprovante ou gatilho no banco.
+  instante. So o proprio dono e afetado: o comprovante e sempre do usuario que o enviou, entao
+  nao ha vazamento entre usuarios nem corrupcao de saldo; no pior caso um comprovante serve a
+  dois registros do mesmo usuario. Opcao futura: tabela unica de uso de comprovante ou gatilho
+  no banco.
 - **Paginacao** de `GET /users` e `GET /categories` (hoje limitados a 500 resultados).
 - **`TRUST_PROXY` em deploy:** definir o numero exato de saltos do ambiente real.
 - **CHECK/limite de quantidade:** limites de quantidade por usuario (comprovantes, gastos,
