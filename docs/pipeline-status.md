@@ -1,6 +1,6 @@
 # Estado do pipeline
 
-Ultima atualizacao: 2026-11-08. Atualize este arquivo a cada execucao relevante do CI.
+Ultima atualizacao: 2026-11-09. Atualize este arquivo a cada execucao relevante do CI.
 
 ## Resumo honesto
 
@@ -48,7 +48,14 @@ Revisao final (2026-11-08):
 - Novo job `docker-build` e passo `check-secrets` no workflow: so validados estaticamente
   (YAML parseado, comandos conferidos no `package.json`).
 
-Contagens da ultima rodada local registrada: 1059 unitarios, 168 de integracao e 517 e2e.
+Contagens da ultima rodada local registrada (2026-11-09, branch `feature/loans`, com as 3 migrations
+novas): 1424 unitarios (54 suites); integracao 219 passam e 1 falha de 220 (17 suites); 725 e2e
+(22 suites); `tsc --noEmit`, `npm run lint`, `npm run build` e `node scripts/check-secrets.js` sem erro.
+A falha de integracao e conhecida e nao e do codigo: `test/integration/env-file.spec.ts` (linha 136)
+sobe `src/main.ts` na porta 3000 e recebe `EADDRINUSE` quando outro processo da maquina a ocupa.
+Rodando duas suites de banco ao mesmo tempo no mesmo `finance_test` os testes se atropelam; para
+rodar em paralelo use outro `TEST_DATABASE_URL` (nome terminado em `_test`). Isto e local: o CI
+continua sem ter rodado no GitHub.
 
 ## Pendencias
 
