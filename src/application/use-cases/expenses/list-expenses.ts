@@ -4,6 +4,7 @@ import { ValidationError } from '../../../domain/errors';
 import { PaymentMethod } from '../../../domain/payment-method';
 import { Actor } from '../../actor';
 import { ExpenseFilter, ExpenseRepository } from '../../ports/expense-repository';
+import { toInt } from '../paging';
 import { toPaymentMethod } from './expense-input';
 
 export const DEFAULT_EXPENSE_PAGE = 100;
@@ -27,14 +28,6 @@ export interface ExpensePageResult {
   total: number;
   limit: number;
   offset: number;
-}
-
-export function toInt(value: unknown, field: string, min: number, max: number, fallback: number): number {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) {
-    throw new ValidationError(`${field} must be an integer between ${min} and ${max}`);
-  }
-  return value;
 }
 
 /** Lists the actor's own expenses (admins see no one else's), newest first. */

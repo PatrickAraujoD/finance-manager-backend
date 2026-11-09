@@ -5,7 +5,7 @@ import { requireCleanText } from '../../../domain/validation';
 import { Actor } from '../../actor';
 import { Clock } from '../../ports/clock';
 import { LoanFilter, LoanRepository } from '../../ports/loan-repository';
-import { toInt } from '../expenses/list-expenses';
+import { toInt } from '../paging';
 import { LoanDetails, withBalance } from './get-loan';
 
 export const DEFAULT_LOAN_PAGE = 100;
