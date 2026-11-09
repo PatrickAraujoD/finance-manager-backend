@@ -260,7 +260,8 @@ Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um com
     digitou**, mesmo quando ha comprovante e mesmo no gasto dividido (`paidAlone=false`);
   - `paidAlone` (booleano): se pagou sozinho ou dividiu;
   - `paymentMethod` (obrigatorio): forma de pagamento, exatamente `CREDIT`, `DEBIT` ou `PIX`
-    (maiusculas; qualquer outro valor responde `400`);
+    (maiusculas; qualquer outro valor responde `400`). **Mudanca incompativel:** clientes
+    antigos que nao enviam `paymentMethod` em `POST /expenses` passam a receber `400`;
   - `spentAt` (`YYYY-MM-DD`, data real do calendario, no maximo hoje + 1 dia em UTC);
   - `receiptId` (opcional, UUID de comprovante proprio; sem ele e um lancamento manual);
   - `description` (opcional, ate 500 caracteres).

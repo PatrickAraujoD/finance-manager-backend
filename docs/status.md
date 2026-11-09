@@ -26,7 +26,8 @@ Ultima atualizacao: 2026-11-09 (emprestimos e forma de pagamento; contagens refe
 Entregue na branch `feature/loans` (3 migrations novas: `expense_payment_method`, `loans`,
 `loan_payments`):
 - `paymentMethod` obrigatorio nas despesas (`CREDIT`, `DEBIT`, `PIX`); as despesas antigas foram
-  migradas como `PIX`.
+  migradas como `PIX`. **Mudanca incompativel:** clientes antigos de `POST /expenses` que nao
+  enviam o campo passam a receber `400`.
 - Emprestimos: criar a partir de uma despesa ou em dinheiro, listar, ver, corrigir nome/vencimento,
   excluir (409 se tiver pagamentos; apagar uma despesa que virou emprestimo tambem responde 409).
   Situacao `OPEN`/`PAID`/`OVERDUE` calculada no dominio; vencimento minimo `2000-01-01`.
