@@ -1,5 +1,7 @@
 import { parseCalendarDate } from '../../../domain/calendar-date';
 import { ValidationError } from '../../../domain/errors';
+import { Clock } from '../../ports/clock';
+import { toSpentAt } from '../expenses/expense-input';
 
 /**
  * Oldest accepted `dueDate`. Past dates are allowed on purpose (the user may register an old
@@ -17,6 +19,18 @@ export function toDueDate(value: unknown): Date {
   const date = parseCalendarDate(value as string, 'dueDate');
   if (date.getTime() < Date.parse(`${MIN_DUE_DATE}T00:00:00Z`)) {
     throw new ValidationError(`dueDate cannot be before ${MIN_DUE_DATE}`);
+  }
+  return date;
+}
+
+/**
+ * When the money changed hands: the same ceiling as an expense date (today + 1 day, UTC, from the
+ * Clock) and the same floor as a due date. Past dates are fine, a late registration is normal.
+ */
+export function toPaidAt(value: unknown, clock: Clock): Date {
+  const date = toSpentAt(value, clock, 'paidAt');
+  if (date.getTime() < Date.parse(`${MIN_DUE_DATE}T00:00:00Z`)) {
+    throw new ValidationError(`paidAt cannot be before ${MIN_DUE_DATE}`);
   }
   return date;
 }

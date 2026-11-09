@@ -26,7 +26,9 @@ export class FakeLoanPaymentRepository implements LoanPaymentRepository {
     }
     const paid = this.paidOn(payment.loanId);
     if (paid + payment.amount.cents > loan.amount.cents) {
-      throw new ValidationError('Payment exceeds the remaining balance of the loan');
+      throw new ValidationError(
+        `Payment of ${payment.amount.cents} cents exceeds the remaining balance of ${loan.amount.cents - paid} cents`,
+      );
     }
     // Like the database, which stamps createdAt on insert.
     this.items.set(

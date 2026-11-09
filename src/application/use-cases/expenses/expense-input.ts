@@ -30,12 +30,13 @@ export function toAmount(value: unknown): Money {
   return Money.fromCents(value);
 }
 
-export function toSpentAt(value: unknown, clock: Clock): Date {
-  const date = parseCalendarDate(value as string, 'spentAt');
+/** `field` names the input in the error messages; other dates (a loan payment's) share the rule. */
+export function toSpentAt(value: unknown, clock: Clock, field = 'spentAt'): Date {
+  const date = parseCalendarDate(value as string, field);
   const now = clock.now();
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   if (date.getTime() > today + MAX_FUTURE_DAYS * DAY_MS) {
-    throw new ValidationError('spentAt cannot be in the future');
+    throw new ValidationError(`${field} cannot be in the future`);
   }
   return date;
 }
