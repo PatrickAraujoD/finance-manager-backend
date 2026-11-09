@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { Clock } from '../../../application/ports/clock';
 import { ExpenseRepository } from '../../../application/ports/expense-repository';
 import { IdGenerator } from '../../../application/ports/id-generator';
+import { LoanPaymentRepository } from '../../../application/ports/loan-payment-repository';
 import { LoanRepository } from '../../../application/ports/loan-repository';
 import { CreateLoan } from '../../../application/use-cases/loans/create-loan';
 import { DeleteLoan } from '../../../application/use-cases/loans/delete-loan';
@@ -9,7 +10,13 @@ import { GetLoan } from '../../../application/use-cases/loans/get-loan';
 import { ListLoans } from '../../../application/use-cases/loans/list-loans';
 import { UpdateLoan } from '../../../application/use-cases/loans/update-loan';
 import { LoansController } from '../controllers/loans.controller';
-import { CLOCK, EXPENSE_REPOSITORY, ID_GENERATOR, LOAN_REPOSITORY } from '../tokens';
+import {
+  CLOCK,
+  EXPENSE_REPOSITORY,
+  ID_GENERATOR,
+  LOAN_PAYMENT_REPOSITORY,
+  LOAN_REPOSITORY,
+} from '../tokens';
 
 @Module({
   controllers: [LoansController],
@@ -22,23 +29,27 @@ import { CLOCK, EXPENSE_REPOSITORY, ID_GENERATOR, LOAN_REPOSITORY } from '../tok
     },
     {
       provide: UpdateLoan,
-      inject: [LOAN_REPOSITORY, CLOCK],
-      useFactory: (loans: LoanRepository, clock: Clock) => new UpdateLoan(loans, clock),
+      inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY, CLOCK],
+      useFactory: (loans: LoanRepository, payments: LoanPaymentRepository, clock: Clock) =>
+        new UpdateLoan(loans, payments, clock),
     },
     {
       provide: DeleteLoan,
-      inject: [LOAN_REPOSITORY],
-      useFactory: (loans: LoanRepository) => new DeleteLoan(loans),
+      inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY],
+      useFactory: (loans: LoanRepository, payments: LoanPaymentRepository) =>
+        new DeleteLoan(loans, payments),
     },
     {
       provide: GetLoan,
-      inject: [LOAN_REPOSITORY, CLOCK],
-      useFactory: (loans: LoanRepository, clock: Clock) => new GetLoan(loans, clock),
+      inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY, CLOCK],
+      useFactory: (loans: LoanRepository, payments: LoanPaymentRepository, clock: Clock) =>
+        new GetLoan(loans, payments, clock),
     },
     {
       provide: ListLoans,
-      inject: [LOAN_REPOSITORY, CLOCK],
-      useFactory: (loans: LoanRepository, clock: Clock) => new ListLoans(loans, clock),
+      inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY, CLOCK],
+      useFactory: (loans: LoanRepository, payments: LoanPaymentRepository, clock: Clock) =>
+        new ListLoans(loans, payments, clock),
     },
   ],
 })

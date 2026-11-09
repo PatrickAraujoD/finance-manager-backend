@@ -1,10 +1,10 @@
 import { Loan } from '../../../domain/entities/loan';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
-import { Money } from '../../../domain/money';
 import { Actor } from '../../actor';
 import { Clock } from '../../ports/clock';
+import { LoanPaymentRepository } from '../../ports/loan-payment-repository';
 import { LoanRepository } from '../../ports/loan-repository';
-import { findOwnLoan, LoanDetails, withBalance } from './get-loan';
+import { detailsOf, findOwnLoan, LoanDetails } from './get-loan';
 import { toBorrowerName, toDueDate } from './loan-input';
 
 /** Editable fields only: the amount, `expenseId` and `userId` are immutable and never read. */
@@ -16,6 +16,7 @@ export interface UpdateLoanInput {
 export class UpdateLoan {
   constructor(
     private readonly loans: LoanRepository,
+    private readonly payments: LoanPaymentRepository,
     private readonly clock: Clock,
   ) {}
 
@@ -39,7 +40,6 @@ export class UpdateLoan {
     });
     // False means the loan vanished between the read and the write (concurrent delete).
     if (!(await this.loans.update(updated))) throw new NotFoundError('Loan not found');
-    // No payments exist yet, so nothing has been paid.
-    return withBalance(updated, Money.fromCents(0), this.clock.now());
+    return detailsOf(this.payments, actor, updated, this.clock.now());
   }
 }

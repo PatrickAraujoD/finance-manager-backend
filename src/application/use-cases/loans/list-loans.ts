@@ -4,6 +4,7 @@ import { Money } from '../../../domain/money';
 import { requireCleanText } from '../../../domain/validation';
 import { Actor } from '../../actor';
 import { Clock } from '../../ports/clock';
+import { LoanPaymentRepository } from '../../ports/loan-payment-repository';
 import { LoanFilter, LoanRepository } from '../../ports/loan-repository';
 import { toInt } from '../paging';
 import { LoanDetails, withBalance } from './get-loan';
@@ -37,11 +38,14 @@ export interface LoanPageResult {
  *
  * The status depends on payments and on today's date, and the rule lives in the domain, not in
  * SQL. So the repository returns every loan that matches the borrower and the balances are
- * computed here before filtering and paging. A person has a handful of loans, so this is cheap.
+ * computed here before filtering and paging. The paid amounts come from ONE aggregated query for
+ * all the loans (no query per loan). Known debt: the filter and the paging run in memory over
+ * every loan of the user; see docs/status.md.
  */
 export class ListLoans {
   constructor(
     private readonly loans: LoanRepository,
+    private readonly payments: LoanPaymentRepository,
     private readonly clock: Clock,
   ) {}
 
@@ -65,9 +69,13 @@ export class ListLoans {
     const offset = toInt(input.offset, 'offset', 0, MAX_LOAN_OFFSET, 0);
 
     const now = this.clock.now();
-    const all = (await this.loans.listByUser(actor.id, filter))
-      // No payments exist yet, so nothing has been paid.
-      .map((loan) => withBalance(loan, Money.fromCents(0), now))
+    const found = await this.loans.listByUser(actor.id, filter);
+    const paid = await this.payments.sumPaidByLoans(
+      actor.id,
+      found.map((loan) => loan.id),
+    );
+    const all = found
+      .map((loan) => withBalance(loan, Money.fromCents(paid.get(loan.id) ?? 0), now))
       .filter((details) => status === undefined || details.balance.status === status);
     return { items: all.slice(offset, offset + limit), total: all.length, limit, offset };
   }
