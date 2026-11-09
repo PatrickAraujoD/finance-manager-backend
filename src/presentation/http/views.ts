@@ -9,6 +9,7 @@ import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
 import { LoanStatus } from '../../domain/loan-balance';
+import { LoanSummary, LoanSummaryTotals } from '../../domain/loan-summary';
 import { LoanPaymentMethod } from '../../domain/loan-payment-method';
 import { PaymentMethod } from '../../domain/payment-method';
 import { Role } from '../../domain/role';
@@ -121,6 +122,45 @@ export function toLoanPaymentView(payment: LoanPayment): LoanPaymentView {
     receiptId: payment.receiptId,
     paidAt: formatCalendarDate(payment.paidAt),
     createdAt: payment.createdAt,
+  };
+}
+
+export interface BorrowerSummaryView extends LoanSummaryTotals {
+  borrowerName: string;
+  loansCount: number;
+  overdueLoansCount: number;
+  /** Calendar date `YYYY-MM-DD` of the earliest loan with a balance; null when all are settled. */
+  nextDueDate: string | null;
+}
+
+export interface LoanSummaryView {
+  items: BorrowerSummaryView[];
+  totals: LoanSummaryTotals;
+  truncated: boolean;
+}
+
+/** Explicit field list for each person and for the totals; nothing else of the domain leaks. */
+export function toLoanSummaryView(summary: LoanSummary): LoanSummaryView {
+  return {
+    items: summary.items.map((item) => ({
+      borrowerName: item.borrowerName,
+      loansCount: item.loansCount,
+      totalLentCents: item.totalLentCents,
+      paidCents: item.paidCents,
+      owedCents: item.owedCents,
+      upcomingCents: item.upcomingCents,
+      overdueCents: item.overdueCents,
+      overdueLoansCount: item.overdueLoansCount,
+      nextDueDate: item.nextDueDate ? formatCalendarDate(item.nextDueDate) : null,
+    })),
+    totals: {
+      totalLentCents: summary.totals.totalLentCents,
+      paidCents: summary.totals.paidCents,
+      owedCents: summary.totals.owedCents,
+      upcomingCents: summary.totals.upcomingCents,
+      overdueCents: summary.totals.overdueCents,
+    },
+    truncated: summary.truncated,
   };
 }
 

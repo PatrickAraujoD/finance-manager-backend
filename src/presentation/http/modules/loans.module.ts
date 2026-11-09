@@ -8,6 +8,7 @@ import { LoanRepository } from '../../../application/ports/loan-repository';
 import { CreateLoan } from '../../../application/use-cases/loans/create-loan';
 import { DeleteLoan } from '../../../application/use-cases/loans/delete-loan';
 import { GetLoan } from '../../../application/use-cases/loans/get-loan';
+import { GetLoanSummary } from '../../../application/use-cases/loans/get-loan-summary';
 import { ListLoans } from '../../../application/use-cases/loans/list-loans';
 import { ListLoanPayments } from '../../../application/use-cases/loans/list-loan-payments';
 import { RegisterLoanPayment } from '../../../application/use-cases/loans/register-loan-payment';
@@ -54,6 +55,12 @@ import {
       inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY, CLOCK],
       useFactory: (loans: LoanRepository, payments: LoanPaymentRepository, clock: Clock) =>
         new ListLoans(loans, payments, clock),
+    },
+    {
+      provide: GetLoanSummary,
+      inject: [LOAN_REPOSITORY, LOAN_PAYMENT_REPOSITORY, CLOCK],
+      useFactory: (loans: LoanRepository, payments: LoanPaymentRepository, clock: Clock) =>
+        new GetLoanSummary(loans, payments, clock),
     },
     {
       provide: RegisterLoanPayment,

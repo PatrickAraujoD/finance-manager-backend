@@ -13,6 +13,7 @@ import {
 import { CreateLoan } from '../../../application/use-cases/loans/create-loan';
 import { DeleteLoan } from '../../../application/use-cases/loans/delete-loan';
 import { GetLoan } from '../../../application/use-cases/loans/get-loan';
+import { GetLoanSummary } from '../../../application/use-cases/loans/get-loan-summary';
 import { ListLoanPayments } from '../../../application/use-cases/loans/list-loan-payments';
 import { ListLoans } from '../../../application/use-cases/loans/list-loans';
 import { RegisterLoanPayment } from '../../../application/use-cases/loans/register-loan-payment';
@@ -21,10 +22,18 @@ import { AuthenticatedUser, CurrentUser } from '../decorators/current-user.decor
 import {
   CreateLoanDto,
   ListLoansQueryDto,
+  LoanSummaryQueryDto,
   RegisterLoanPaymentDto,
   UpdateLoanDto,
 } from '../dtos/loans.dto';
-import { LoanPaymentView, LoanView, toLoanPaymentView, toLoanView } from '../views';
+import {
+  LoanPaymentView,
+  LoanSummaryView,
+  LoanView,
+  toLoanPaymentView,
+  toLoanSummaryView,
+  toLoanView,
+} from '../views';
 
 interface LoanPageView {
   items: LoanView[];
@@ -42,6 +51,7 @@ export class LoansController {
     private readonly deleteLoan: DeleteLoan,
     private readonly getLoan: GetLoan,
     private readonly listLoans: ListLoans,
+    private readonly getSummary: GetLoanSummary,
     private readonly registerPayment: RegisterLoanPayment,
     private readonly listPayments: ListLoanPayments,
   ) {}
@@ -61,6 +71,18 @@ export class LoansController {
   ): Promise<LoanPageView> {
     const page = await this.listLoans.execute(actor, query);
     return { ...page, items: page.items.map(toLoanView) };
+  }
+
+  /**
+   * Declared BEFORE `:id` so `summary` is never read as an id (which `ParseUUIDPipe` would
+   * refuse with a 400). Express matches routes in declaration order.
+   */
+  @Get('summary')
+  async summary(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: LoanSummaryQueryDto,
+  ): Promise<LoanSummaryView> {
+    return toLoanSummaryView(await this.getSummary.execute(actor, query));
   }
 
   @Get(':id')

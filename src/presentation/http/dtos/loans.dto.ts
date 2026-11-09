@@ -121,3 +121,12 @@ export class RegisterLoanPaymentDto {
   @IsUUID()
   receiptId?: string;
 }
+
+/** Query of GET /loans/summary: only the optional person filter (the same rules as the list). */
+export class LoanSummaryQueryDto {
+  @ValidateIf(present)
+  @IsString()
+  @CleanText({ kind: 'name' })
+  @Length(1, MAX_BORROWER_NAME * 2)
+  borrower?: string;
+}
