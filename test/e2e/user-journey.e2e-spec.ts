@@ -144,6 +144,7 @@ describe('complete user journey', () => {
       receiptId: res.body.receiptId,
       amountCents: 12_000,
       paidAlone: true,
+      paymentMethod: 'PIX',
       spentAt: '2026-11-02',
       description: DESCRIPTIONS[0],
     });
@@ -162,6 +163,7 @@ describe('complete user journey', () => {
       receiptId: res.body.receiptId,
       amountCents: res.body.suggestedAmountCents,
       paidAlone: true,
+      paymentMethod: 'PIX',
       spentAt: '2026-11-05',
       description: DESCRIPTIONS[1],
     });
@@ -178,6 +180,7 @@ describe('complete user journey', () => {
       receiptId: res.body.receiptId,
       amountCents: 5_000,
       paidAlone: false,
+      paymentMethod: 'PIX',
       spentAt: '2026-11-05',
       description: DESCRIPTIONS[2],
     });
@@ -185,11 +188,12 @@ describe('complete user journey', () => {
   });
 
   it('records manual expenses without a receipt', async () => {
-    const nov = await expense({ categoryId: s.mercado, amountCents: 3_000, paidAlone: true, spentAt: '2026-11-02' });
+    const nov = await expense({ categoryId: s.mercado, amountCents: 3_000, paidAlone: true, paymentMethod: 'PIX', spentAt: '2026-11-02' });
     const oct = await expense({
       categoryId: s.mercado,
       amountCents: 1_000,
       paidAlone: true,
+      paymentMethod: 'PIX',
       spentAt: '2026-10-15',
       description: DESCRIPTIONS[3],
     });

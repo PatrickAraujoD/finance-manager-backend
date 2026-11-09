@@ -37,8 +37,8 @@ describe('reports endpoints', () => {
   /** Inserted directly so dates in the far future or past (leap years) are possible. */
   async function spend(s: Session, categoryId: string, cents: number, date: string) {
     await t.prisma.client.$executeRaw`
-      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-      VALUES (${`e${++seq}`}, ${s.id}, ${categoryId}, ${cents}, true, ${date}::date)`;
+      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+      VALUES (${`e${++seq}`}, ${s.id}, ${categoryId}, ${cents}, true, 'PIX', ${date}::date)`;
   }
 
   const PATHS = [
@@ -332,7 +332,7 @@ describe('reports endpoints', () => {
       const created = await http()
         .post('/expenses')
         .set(...bearer(ana))
-        .send({ categoryId: global, amountCents: 4242, paidAlone: true, spentAt: today });
+        .send({ categoryId: global, amountCents: 4242, paidAlone: true, paymentMethod: 'PIX', spentAt: today });
       expect(created.status).toBe(201);
       const res = await report(ana, `by-day?month=${today.slice(0, 7)}`);
       expect(res.body.topDay).toEqual({ date: today, totalCents: 4242 });
@@ -370,8 +370,8 @@ describe('reports endpoints', () => {
 
     it('sums many maximum expenses without losing precision', async () => {
       await t.prisma.client.$executeRaw`
-        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-        SELECT 'max' || g, ${ana.id}, ${global}, 1000000000, true, '2026-11-01'::date
+        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+        SELECT 'max' || g, ${ana.id}, ${global}, 1000000000, true, 'PIX', '2026-11-01'::date
         FROM generate_series(1, 5000) g`;
       const res = await report(ana, 'income-vs-spent?month=2026-11');
       expect(res.body.spentCents).toBe(5_000_000_000_000);

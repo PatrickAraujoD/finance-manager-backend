@@ -153,7 +153,7 @@ describe('hostile text input never causes a 500', () => {
       it.each(single)('rejects %s in an expense description (400)', async (c) => {
         const res = await withAuth(
           '/expenses',
-          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"spentAt":"2026-11-01","description":"a${c}b"}`,
+          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"paymentMethod":"PIX","spentAt":"2026-11-01","description":"a${c}b"}`,
         );
         expect(res.status).toBe(400);
       });
@@ -161,7 +161,7 @@ describe('hostile text input never causes a 500', () => {
       it.each(ok)('accepts %s in an expense description', async (c) => {
         const res = await withAuth(
           '/expenses',
-          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"spentAt":"2026-11-01","description":"a${c}b"}`,
+          `{"categoryId":"${categoryId}","amountCents":100,"paidAlone":true,"paymentMethod":"PIX","spentAt":"2026-11-01","description":"a${c}b"}`,
         );
         expect(res.status).toBe(201);
       });

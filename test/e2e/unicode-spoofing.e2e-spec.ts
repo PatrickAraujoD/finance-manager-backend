@@ -53,7 +53,7 @@ describe('invisible and spoofing Unicode', () => {
     return http()
       .post('/expenses')
       .set(...bearer(ana))
-      .send({ categoryId: cat, amountCents: 100, paidAlone: true, spentAt: '2026-11-01', description });
+      .send({ categoryId: cat, amountCents: 100, paidAlone: true, paymentMethod: 'PIX', spentAt: '2026-11-01', description });
   };
 
   describe('user names', () => {

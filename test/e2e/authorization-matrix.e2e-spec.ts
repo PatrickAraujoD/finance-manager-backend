@@ -82,6 +82,7 @@ describe('authorization matrix', () => {
         categoryId: bCategory,
         amountCents: 4200,
         paidAlone: true,
+        paymentMethod: 'PIX',
         spentAt: '2026-11-03',
         description: 'gasto da bia',
       })
@@ -294,6 +295,7 @@ describe('authorization matrix', () => {
             categoryId: x === 'foreign' ? w.bCategory : randomUUID(),
             amountCents: 100,
             paidAlone: true,
+            paymentMethod: 'PIX',
             spentAt: '2026-11-04',
           }),
       },
@@ -305,6 +307,7 @@ describe('authorization matrix', () => {
             receiptId: x === 'foreign' ? w.bReceipt : randomUUID(),
             amountCents: 100,
             paidAlone: true,
+            paymentMethod: 'PIX',
             spentAt: '2026-11-04',
           }),
       },

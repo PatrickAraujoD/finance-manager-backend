@@ -55,6 +55,7 @@ describe('expenses endpoints', () => {
     categoryId: global,
     amountCents: 2550,
     paidAlone: true,
+    paymentMethod: 'PIX',
     spentAt: '2026-11-05',
   });
 
@@ -93,6 +94,7 @@ describe('expenses endpoints', () => {
           'description',
           'id',
           'paidAlone',
+          'paymentMethod',
           'receiptId',
           'spentAt',
         ].sort(),
@@ -103,6 +105,7 @@ describe('expenses endpoints', () => {
         receiptId: null,
         amountCents: 2550,
         paidAlone: true,
+        paymentMethod: 'PIX',
         spentAt: '2026-11-05',
         description: 'Almoço',
       });
@@ -118,6 +121,32 @@ describe('expenses endpoints', () => {
         paidAlone: false,
         description: null,
       });
+    });
+
+    it.each(['CREDIT', 'DEBIT', 'PIX'])('stores and returns the payment method %s', async (paymentMethod) => {
+      const res = await post(ana, { ...valid(), paymentMethod });
+      expect(res.status).toBe(201);
+      expect((await get(ana, res.body.id)).body.paymentMethod).toBe(paymentMethod);
+    });
+
+    it('requires the payment method (400)', async () => {
+      const { paymentMethod: _omit, ...rest } = valid();
+      void _omit;
+      expect((await post(ana, rest)).status).toBe(400);
+      await expectNoExpenses();
+    });
+
+    it.each([
+      ['null', null],
+      ['an empty string', ''],
+      ['an unknown method', 'CASH'],
+      ['lowercase', 'pix'],
+      ['a number', 1],
+      ['an array', ['PIX']],
+      ['an object', { a: 1 }],
+    ])('rejects a payment method that is %s (400)', async (_l, paymentMethod) => {
+      expect((await post(ana, { ...valid(), paymentMethod })).status).toBe(400);
+      await expectNoExpenses();
     });
 
     it('accepts the largest amount and one cent', async () => {
@@ -156,7 +185,7 @@ describe('expenses endpoints', () => {
         .set(...bearer(ana))
         .set('Content-Type', 'application/json')
         .send(
-          `{"categoryId":"${global}","amountCents":99999999999999999999999,"paidAlone":true,"spentAt":"2026-11-05"}`,
+          `{"categoryId":"${global}","amountCents":99999999999999999999999,"paidAlone":true,"paymentMethod":"PIX","spentAt":"2026-11-05"}`,
         );
       expect(res.status).toBe(400);
       await expectNoExpenses();
@@ -350,6 +379,15 @@ describe('expenses endpoints', () => {
       expect(res.body).toMatchObject({ spentAt: '2026-10-31', paidAlone: false, description: null });
     });
 
+    it('changes the payment method and keeps it when not sent', async () => {
+      const { id } = (await post(ana, { ...valid(), paymentMethod: 'CREDIT' })).body;
+      const res = await patch(ana, id, { paymentMethod: 'DEBIT' });
+      expect(res.status).toBe(200);
+      expect(res.body.paymentMethod).toBe('DEBIT');
+      expect((await get(ana, id)).body.paymentMethod).toBe('DEBIT');
+      expect((await patch(ana, id, { amountCents: 5 })).body.paymentMethod).toBe('DEBIT');
+    });
+
     it('needs at least one field (400)', async () => {
       const { id } = (await post(ana, valid())).body;
       expect((await patch(ana, id, {})).status).toBe(400);
@@ -385,6 +423,10 @@ describe('expenses endpoints', () => {
       { spentAt: dayFromToday(3) },
       { categoryId: 'abc' },
       { paidAlone: 'no' },
+      { paymentMethod: null },
+      { paymentMethod: 'CASH' },
+      { paymentMethod: 'pix' },
+      { paymentMethod: 1 },
       { description: null },
       { description: 'a'.repeat(501) },
     ])('rejects the invalid change %j (400)', async (body) => {
@@ -462,6 +504,7 @@ describe('expenses endpoints', () => {
           'description',
           'id',
           'paidAlone',
+          'paymentMethod',
           'receiptId',
           'spentAt',
         ].sort(),
@@ -470,6 +513,23 @@ describe('expenses endpoints', () => {
       expect(again.body.items.map((e: { id: string }) => e.id)).toEqual(
         res.body.items.map((e: { id: string }) => e.id),
       );
+    });
+
+    it('filters by payment method and rejects an invalid one (400)', async () => {
+      for (const paymentMethod of ['CREDIT', 'DEBIT', 'PIX', 'PIX']) {
+        await post(ana, { ...valid(), paymentMethod });
+      }
+      await post(bob, { ...valid(), paymentMethod: 'CREDIT' });
+      const only = async (m: string) => (await list(ana, `?paymentMethod=${m}`)).body;
+      expect((await only('CREDIT')).total).toBe(1);
+      expect((await only('DEBIT')).total).toBe(1);
+      const pix = await only('PIX');
+      expect(pix.total).toBe(2);
+      expect(pix.items.every((e: { paymentMethod: string }) => e.paymentMethod === 'PIX')).toBe(true);
+      expect((await list(ana, '?paymentMethod=PIX&limit=1')).body).toMatchObject({ total: 2 });
+      for (const bad of ['CASH', 'pix', '', 'PIX&paymentMethod=CREDIT']) {
+        expect((await list(ana, `?paymentMethod=${bad}`)).status).toBe(400);
+      }
     });
 
     it('filters by inclusive dates and by category', async () => {

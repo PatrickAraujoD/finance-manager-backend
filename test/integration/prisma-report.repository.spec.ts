@@ -48,8 +48,8 @@ describe('PrismaReportRepository (Postgres)', () => {
 
   async function spend(userId: string, categoryId: string, cents: number, date: string) {
     await prisma.client.$executeRaw`
-      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, ${date}::date)`;
+      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, 'PIX', ${date}::date)`;
   }
 
   const cents = (rows: { total: { cents: number } }[]) => rows.map((r) => r.total.cents);
@@ -277,8 +277,8 @@ describe('PrismaReportRepository (Postgres)', () => {
   describe('money precision', () => {
     it('adds many maximum expenses exactly', async () => {
       await prisma.client.$executeRaw`
-        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-        SELECT 'max' || g, 'ana', 'c-food', 1000000000, true, '2026-11-01'::date
+        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+        SELECT 'max' || g, 'ana', 'c-food', 1000000000, true, 'PIX', '2026-11-01'::date
         FROM generate_series(1, 5000) g`;
       expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(5_000_000_000_000);
       expect((await repo.totalsByDay('ana', '2026-11'))[0].total.cents).toBe(5_000_000_000_000);
@@ -318,12 +318,13 @@ describe('PrismaReportRepository (Postgres)', () => {
   describe('performance with 3 users and 10,000 expenses', () => {
     beforeEach(async () => {
       await prisma.client.$executeRaw`
-        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
+        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
         SELECT 'p' || g,
                (ARRAY['ana','bob','admin'])[1 + (g % 3)],
                (ARRAY['c-food','c-bus'])[1 + (g % 2)],
                100 + (g % 5000),
                true,
+               'PIX',
                DATE '2025-01-01' + (g % 700)
         FROM generate_series(1, 10000) g`;
       await prisma.client.$executeRawUnsafe('ANALYZE "Expense"');

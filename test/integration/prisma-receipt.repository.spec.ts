@@ -150,6 +150,7 @@ describe('PrismaReceiptRepository (Postgres)', () => {
           receiptId,
           amountCents: 100n,
           paidAlone: true,
+          paymentMethod: 'PIX',
           spentAt: new Date('2026-11-01'),
         },
       });
