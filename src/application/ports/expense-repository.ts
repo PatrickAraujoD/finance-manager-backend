@@ -40,6 +40,9 @@ export interface ExpenseRepository {
   listByUser(userId: string, filter: ExpenseFilter, page?: ExpensePage): Promise<Expense[]>;
   /** Number of expenses of `userId` matching `filter` (ignores paging). */
   countByUser(userId: string, filter: ExpenseFilter): Promise<number>;
-  /** Deletes the expense only when it belongs to `userId`; false when nothing was deleted. */
+  /**
+   * Deletes the expense only when it belongs to `userId`; false when nothing was deleted. Throws
+   * `ConflictError` while a loan created from the expense exists.
+   */
   delete(userId: string, id: string): Promise<boolean>;
 }

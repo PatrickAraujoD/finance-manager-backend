@@ -128,7 +128,13 @@ export class PrismaExpenseRepository implements ExpenseRepository {
   }
 
   async delete(userId: string, id: string): Promise<boolean> {
-    const result = await this.prisma.client.expense.deleteMany({ where: { id, userId } });
-    return result.count > 0;
+    try {
+      const result = await this.prisma.client.expense.deleteMany({ where: { id, userId } });
+      return result.count > 0;
+    } catch (error) {
+      // FK Restrict: a loan was created from this expense and still points at it.
+      if (errorCode(error) === 'P2003') throw new ConflictError('Expense has a loan');
+      throw error;
+    }
   }
 }
