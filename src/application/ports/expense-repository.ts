@@ -40,6 +40,8 @@ export interface ExpenseRepository {
   listByUser(userId: string, filter: ExpenseFilter, page?: ExpensePage): Promise<Expense[]>;
   /** Number of expenses of `userId` matching `filter` (ignores paging). */
   countByUser(userId: string, filter: ExpenseFilter): Promise<number>;
+  /** True when any expense (of any user) uses this receipt. */
+  isReceiptUsed(receiptId: string): Promise<boolean>;
   /**
    * Deletes the expense only when it belongs to `userId`; false when nothing was deleted. Throws
    * `ConflictError` while a loan created from the expense exists.

@@ -127,6 +127,10 @@ export class PrismaExpenseRepository implements ExpenseRepository {
     return this.prisma.client.expense.count({ where: where(userId, filter) });
   }
 
+  async isReceiptUsed(receiptId: string): Promise<boolean> {
+    return (await this.prisma.client.expense.count({ where: { receiptId } })) > 0;
+  }
+
   async delete(userId: string, id: string): Promise<boolean> {
     try {
       const result = await this.prisma.client.expense.deleteMany({ where: { id, userId } });

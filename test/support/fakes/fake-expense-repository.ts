@@ -62,6 +62,9 @@ export class FakeExpenseRepository implements ExpenseRepository {
   async countByUser(userId: string, filter: ExpenseFilter): Promise<number> {
     return this.matching(userId, filter).length;
   }
+  async isReceiptUsed(receiptId: string): Promise<boolean> {
+    return [...this.items.values()].some((e) => e.receiptId === receiptId);
+  }
   async delete(userId: string, id: string): Promise<boolean> {
     const e = this.items.get(id);
     if (!e || e.userId !== userId) return false;
