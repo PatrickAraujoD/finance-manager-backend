@@ -12,12 +12,9 @@ export const DEFAULT_LOAN_PAGE = 100;
 export const MAX_LOAN_PAGE = 200;
 export const MAX_LOAN_OFFSET = 100_000;
 
-export type LoanStatusFilter = 'open' | 'paid' | 'overdue';
-const STATUS_OF: Record<LoanStatusFilter, LoanStatus> = {
-  open: 'OPEN',
-  paid: 'PAID',
-  overdue: 'OVERDUE',
-};
+/** The same words the response uses for `status`, so a client filters by what it reads. */
+export type LoanStatusFilter = LoanStatus;
+const STATUSES: readonly LoanStatusFilter[] = ['OPEN', 'PAID', 'OVERDUE'];
 
 export interface ListLoansInput {
   /** Case insensitive, ignoring spaces at the ends. */
@@ -59,11 +56,10 @@ export class ListLoans {
     }
     let status: LoanStatus | undefined;
     if (input.status !== undefined) {
-      // hasOwn: keys such as "constructor" must not resolve through the prototype.
-      if (typeof input.status !== 'string' || !Object.hasOwn(STATUS_OF, input.status)) {
-        throw new ValidationError('status must be open, paid or overdue');
+      if (!STATUSES.includes(input.status)) {
+        throw new ValidationError('status must be OPEN, PAID or OVERDUE');
       }
-      status = STATUS_OF[input.status];
+      status = input.status;
     }
     const limit = toInt(input.limit, 'limit', 1, MAX_LOAN_PAGE, DEFAULT_LOAN_PAGE);
     const offset = toInt(input.offset, 'offset', 0, MAX_LOAN_OFFSET, 0);

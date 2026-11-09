@@ -21,7 +21,7 @@ import { CleanText } from './clean-text.decorator';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 // Typed against the use case union so adding a status there forces this list to follow.
-const STATUSES: readonly LoanStatusFilter[] = ['open', 'paid', 'overdue'];
+const STATUSES: readonly LoanStatusFilter[] = ['OPEN', 'PAID', 'OVERDUE'];
 const present = (_: unknown, value: unknown) => value !== undefined;
 
 /**

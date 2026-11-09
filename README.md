@@ -309,7 +309,7 @@ entao hoje `paidCents` e sempre `0`.
 
 **`GET /loans`**. Lista os emprestimos do usuario, do vencimento mais proximo para o mais distante.
 - Query (todas opcionais): `borrower` (nome exato, sem diferenca de maiusculas e minusculas nem de
-  espacos nas pontas), `status` (`open`, `paid` ou `overdue`), `limit` (1 a 200, padrao 100),
+  espacos nas pontas), `status` (`OPEN`, `PAID` ou `OVERDUE`, em maiusculas, igual ao campo da resposta), `limit` (1 a 200, padrao 100),
   `offset` (0 a 100000). Valor invalido responde `400`.
 - Resposta: `200 {"items": [...], "total": 3, "limit": 100, "offset": 0}`; `total` conta todos os
   que passam nos filtros.
