@@ -115,6 +115,7 @@ devolve.
 | DELETE | `/expenses/:id` | N, A | Excluir um gasto |
 | POST | `/loans` | N, A | Registrar um emprestimo (de um gasto ou em dinheiro) |
 | GET | `/loans` | N, A | Listar emprestimos com filtros e paginacao |
+| GET | `/loans/summary` | N, A | Resumo por pessoa: quanto deve, a vencer, atrasado e ja pago |
 | GET | `/loans/:id` | N, A | Ver um emprestimo com pago, saldo e situacao |
 | PATCH | `/loans/:id` | N, A | Corrigir o nome ou o vencimento |
 | DELETE | `/loans/:id` | N, A | Excluir um emprestimo (409 se tiver pagamentos) |
@@ -316,6 +317,29 @@ dos pagamentos, calculada numa unica consulta agregada.
   `offset` (0 a 100000). Valor invalido responde `400`.
 - Resposta: `200 {"items": [...], "total": 3, "limit": 100, "offset": 0}`; `total` conta todos os
   que passam nos filtros.
+
+**`GET /loans/summary`**. Resumo dos emprestimos do usuario, uma linha por pessoa (declarada antes
+de `/loans/:id`, entao `summary` nunca e lido como id).
+- Query (opcional): `borrower` (mesma comparacao de `GET /loans`: sem diferenca de maiusculas e
+  minusculas nem de espacos nas pontas). Em branco ou parametro desconhecido responde `400`.
+- Resposta: `200 {"items": [...], "totals": {...}, "truncated": false}`.
+- Cada item de `items`: `borrowerName`, `loansCount`, `totalLentCents` (soma emprestada),
+  `paidCents` (soma dos pagamentos), `owedCents` (`totalLentCents - paidCents`, o que ainda deve),
+  `upcomingCents` (saldo dos emprestimos que ainda nao venceram, status `OPEN`), `overdueCents`
+  (saldo dos vencidos, status `OVERDUE`), `overdueLoansCount` (quantos emprestimos estao vencidos)
+  e `nextDueDate` (`YYYY-MM-DD`, o menor vencimento entre os emprestimos que ainda tem saldo, ou
+  `null` se a pessoa quitou tudo). Sempre valem `owedCents = upcomingCents + overdueCents` e
+  `owedCents = totalLentCents - paidCents`. Vencer hoje ainda e "a vencer".
+- `totals` traz `totalLentCents`, `paidCents`, `owedCents`, `upcomingCents` e `overdueCents` de
+  todas as pessoas (respeitando o filtro `borrower`), mesmo as que ficaram fora de `items`.
+- Agrupamento: o nome e comparado sem diferenca de maiusculas e minusculas nem de espacos nas
+  pontas (`Carlos` e ` carlos` sao a mesma pessoa); o nome exibido e o do emprestimo mais antigo
+  do grupo. Nao ha cadastro de pessoas. Ordem: `overdueCents` do maior para o menor, depois o
+  nome em ordem alfabetica.
+- Teto: no maximo 500 pessoas em `items`. Se houver mais, ficam as que mais devem atrasado,
+  `truncated` vira `true` e `totals` continua somando todas (nada some em silencio). Sem paginacao.
+- Os calculos usam o mesmo saldo e a mesma data de hoje (dia UTC) do restante dos emprestimos; as
+  somas sao em centavos inteiros e uma soma fora da faixa segura daria erro, nunca numero errado.
 
 **`GET /loans/:id`**. Devolve um emprestimo.
 - Resposta: `200 {"id","borrowerName","amountCents","dueDate","expenseId","paidCents","remainingCents","status","createdAt"}`.

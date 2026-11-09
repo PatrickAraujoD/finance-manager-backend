@@ -18,7 +18,7 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
 | 10 | Endurecimento e fechamento (matriz de autorizacao, README final) | feita (f5495c4); o fluxo manual com curl NAO foi feito, coberto pelo e2e `user-journey` |
 | - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps; workflow ainda NAO rodou no GitHub (`origin` sem push); imagem Docker construida e testada localmente (`docs/pipeline-status.md`) |
 | - | Forma de pagamento nas despesas (`paymentMethod`: `CREDIT`, `DEBIT`, `PIX`; obrigatoria; despesas antigas migradas como `PIX`) | feita na branch `feature/loans` |
-| - | Emprestimos (`/loans`: criar de um gasto ou em dinheiro, listar com filtros, ver, corrigir nome/vencimento, excluir; saldo e situacao `OPEN`/`PAID`/`OVERDUE` calculados no dominio). Pagamentos (`/loans/:id/payments`, dinheiro ou Pix com comprovante, soma travada no banco para nao passar do valor). Falta o resumo por pessoa | feita na branch `feature/loans`, sem o resumo ainda |
+| - | Emprestimos (`/loans`: criar de um gasto ou em dinheiro, listar com filtros, ver, corrigir nome/vencimento, excluir; saldo e situacao `OPEN`/`PAID`/`OVERDUE` calculados no dominio). Pagamentos (`/loans/:id/payments`, dinheiro ou Pix com comprovante, soma travada no banco para nao passar do valor). Resumo por pessoa (`GET /loans/summary`: emprestado, pago, deve, a vencer, atrasado, proximo vencimento; teto de 500 pessoas com `truncated`) | feita na branch `feature/loans` |
 | - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens 1059 unit / 168 integration / 517 e2e |
 
 ## Decisoes-chave
@@ -83,7 +83,8 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
 
 - **Semaforo de PDF/OCR com degradacao cruzada:** hoje PDF e OCR competem por recursos; sob carga
   um tipo pode degradar o outro (retornando `null`). Avaliar semaforos/filas separados por tipo.
-- **Listagem de emprestimos pagina em memoria (divida tecnica):** `GET /loans` carrega TODOS os
+- **Listagem e resumo de emprestimos trabalham em memoria (divida tecnica):** `GET /loans` e
+  `GET /loans/summary` carregam TODOS os
   emprestimos do usuario (so filtrados por `borrower` no SQL), calcula o saldo de cada um com uma
   unica soma agregada de pagamentos e so entao filtra por `status` e pagina em memoria. O custo
   cresce com a quantidade de emprestimos de um usuario. O que mitiga hoje: o dono so ve os
@@ -91,7 +92,9 @@ Ultima atualizacao: 2026-11-08 (revisao final). Fonte detalhada: `docs/superpowe
   requisicoes, os tetos de valor e o `limit`/`offset` limitam o que sai na resposta, e uma pessoa
   tem poucos emprestimos. Opcao futura: mover o filtro de `status` para SQL (saldo e vencimento
   vs. hoje numa unica consulta com paginacao no banco) e/ou impor um teto de emprestimos por
-  usuario.
+  usuario. O resumo tem o mesmo custo (carrega todos os emprestimos do usuario, com a mesma
+  soma agregada de pagamentos, e agrupa em memoria) e a mesma mitigacao; o teto de 500 pessoas
+  limita so o tamanho da resposta, nao o trabalho. Opcao futura: agregar por pessoa no SQL.
 - **Comprovante entre gasto e pagamento nao e unico no banco:** cada tabela garante
   `UNIQUE(receiptId)` e o codigo recusa (409) o comprovante que ja serve a outra tabela, mas ha
   uma janela minuscula se um gasto e um pagamento com o MESMO comprovante forem gravados no mesmo
