@@ -64,6 +64,7 @@ const valid = {
   categoryId: 'g-food',
   amountCents: 2550,
   paidAlone: true,
+  paymentMethod: 'PIX' as const,
   spentAt: '2026-11-05',
 };
 
@@ -230,6 +231,20 @@ describe('CreateExpense', () => {
     expect((await get.execute(ana, id)).description).toBeUndefined();
   });
 
+  it.each(['CREDIT', 'DEBIT', 'PIX'] as const)('stores the payment method %s', async (paymentMethod) => {
+    const { create, get } = await setup();
+    const { id } = await create.execute(ana, { ...valid, paymentMethod });
+    expect((await get.execute(ana, id)).paymentMethod).toBe(paymentMethod);
+  });
+
+  it.each([undefined, null, '', 'CASH', 'pix', 5])('rejects the payment method %p', async (v) => {
+    const { create, expenses } = await setup();
+    await expect(
+      create.execute(ana, { ...valid, paymentMethod: v as unknown as 'PIX' }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(expenses.all()).toHaveLength(0);
+  });
+
   it('rejects a non boolean paidAlone', async () => {
     const { create } = await setup();
     await expect(
@@ -283,6 +298,22 @@ describe('GetExpense / UpdateExpense / DeleteExpense ownership', () => {
     expect(updated.spentAt.toISOString()).toBe('2026-10-31T00:00:00.000Z');
     expect(updated.paidAlone).toBe(false);
     expect(updated.description).toBeUndefined();
+  });
+
+  it('changes the payment method and keeps the other fields', async () => {
+    const { update, id } = await withExpense();
+    const updated = await update.execute(ana, id, { paymentMethod: 'CREDIT' });
+    expect(updated.paymentMethod).toBe('CREDIT');
+    expect(updated.amount.cents).toBe(2550);
+  });
+
+  it('rejects an invalid payment method on update', async () => {
+    const { update, id } = await withExpense();
+    for (const paymentMethod of ['CASH', '', null, 3]) {
+      await expect(
+        update.execute(ana, id, { paymentMethod: paymentMethod as unknown as 'PIX' }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    }
   });
 
   it('needs at least one field', async () => {
@@ -376,6 +407,23 @@ describe('ListExpenses', () => {
     expect((await list.execute(ana, { from: '2026-11-02' })).total).toBe(2);
     expect((await list.execute(ana, { to: '2026-10-31' })).total).toBe(1);
     expect((await list.execute(ana, { categoryId: 'ana-cat' })).total).toBe(1);
+  });
+
+  it('filters by payment method', async () => {
+    const { list, create } = await seeded();
+    const { id } = await create.execute(ana, { ...valid, paymentMethod: 'DEBIT' });
+    const page = await list.execute(ana, { paymentMethod: 'DEBIT' });
+    expect(page.items.map((e) => e.id)).toEqual([id]);
+    expect(page.total).toBe(1);
+    expect((await list.execute(ana, { paymentMethod: 'PIX' })).total).toBe(4);
+    expect((await list.execute(ana, { paymentMethod: 'CREDIT' })).total).toBe(0);
+  });
+
+  it('rejects an invalid payment method filter', async () => {
+    const { list } = await seeded();
+    await expect(
+      list.execute(ana, { paymentMethod: 'CASH' as unknown as 'PIX' }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('a category of someone else only yields an empty list', async () => {

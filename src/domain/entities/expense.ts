@@ -1,5 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
+import { PaymentMethod, parsePaymentMethod } from '../payment-method';
 import { requireCleanText, requireNonBlank } from '../validation';
 
 const MAX_DESCRIPTION = 500;
@@ -17,6 +18,7 @@ export interface ExpenseProps {
   receiptId: string | null;
   amount: Money;
   paidAlone: boolean;
+  paymentMethod: PaymentMethod;
   spentAt: Date;
   description?: string;
   /** Set by the database; null until the expense is persisted. */
@@ -35,6 +37,7 @@ export class Expense {
     requireNonBlank(input.userId, 'userId');
     requireNonBlank(input.categoryId, 'categoryId');
     if (input.receiptId !== null) requireNonBlank(input.receiptId, 'receiptId');
+    parsePaymentMethod(input.paymentMethod);
     if (input.description !== undefined) requireCleanText(input.description, 'description', { kind: 'description' });
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (input.amount.cents > MAX_EXPENSE_CENTS) {
@@ -68,6 +71,9 @@ export class Expense {
   }
   get paidAlone(): boolean {
     return this.props.paidAlone;
+  }
+  get paymentMethod(): PaymentMethod {
+    return this.props.paymentMethod;
   }
   get spentAt(): Date {
     return new Date(this.props.spentAt.getTime());

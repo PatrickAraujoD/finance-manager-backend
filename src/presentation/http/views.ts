@@ -6,6 +6,7 @@ import { formatCalendarDate } from '../../domain/calendar-date';
 import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
+import { PaymentMethod } from '../../domain/payment-method';
 import { Role } from '../../domain/role';
 
 export interface UserView {
@@ -45,6 +46,7 @@ export interface ExpenseView {
   receiptId: string | null;
   amountCents: number;
   paidAlone: boolean;
+  paymentMethod: PaymentMethod;
   /** Calendar date, `YYYY-MM-DD`. */
   spentAt: string;
   description: string | null;
@@ -59,6 +61,7 @@ export function toExpenseView(expense: Expense): ExpenseView {
     receiptId: expense.receiptId,
     amountCents: expense.amount.cents,
     paidAlone: expense.paidAlone,
+    paymentMethod: expense.paymentMethod,
     spentAt: formatCalendarDate(expense.spentAt),
     description: expense.description ?? null,
     createdAt: expense.createdAt,

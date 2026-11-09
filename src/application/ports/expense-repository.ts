@@ -1,4 +1,5 @@
 import { Expense } from '../../domain/entities/expense';
+import { PaymentMethod } from '../../domain/payment-method';
 
 /**
  * `spentAt` is a CALENDAR DATE stored as a `Date` at 00:00 UTC (CTO decision: avoids shifting
@@ -9,6 +10,7 @@ export interface ExpenseFilter {
   from?: Date;
   to?: Date;
   categoryId?: string;
+  paymentMethod?: PaymentMethod;
 }
 
 export interface ExpensePage {
@@ -24,7 +26,7 @@ export interface ExpenseRepository {
    */
   save(expense: Expense): Promise<void>;
   /**
-   * Updates category, amount, paidAlone, spentAt and description of the expense with this id AND
+   * Updates category, amount, paidAlone, paymentMethod, spentAt and description of the expense with this id AND
    * this owner. `userId` and `receiptId` are never changed. Returns false when there is no such
    * row. Throws `NotFoundError` when the new category does not exist.
    */

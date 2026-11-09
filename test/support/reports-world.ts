@@ -37,6 +37,7 @@ export function reportsWorld() {
           receiptId: null,
           amount: Money.fromCents(cents),
           paidAlone: true,
+          paymentMethod: 'PIX',
           spentAt: new Date(`${date}T00:00:00Z`),
         }),
       );

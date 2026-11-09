@@ -1,5 +1,6 @@
 import { Expense } from '../../../domain/entities/expense';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
+import { PaymentMethod } from '../../../domain/payment-method';
 import { Actor } from '../../actor';
 import { CategoryRepository } from '../../ports/category-repository';
 import { Clock } from '../../ports/clock';
@@ -11,6 +12,7 @@ import {
   toAmount,
   toDescription,
   toPaidAlone,
+  toPaymentMethod,
   toSpentAt,
 } from './expense-input';
 
@@ -20,6 +22,7 @@ export interface CreateExpenseInput {
   /** Always the value the user typed or confirmed; a receipt suggestion is never used. */
   amountCents: number;
   paidAlone: boolean;
+  paymentMethod: PaymentMethod;
   /** `YYYY-MM-DD`, a real calendar date, at most today + 1 day (UTC). */
   spentAt: string;
   description?: string;
@@ -39,6 +42,7 @@ export class CreateExpense {
     const amount = toAmount(input.amountCents);
     const spentAt = toSpentAt(input.spentAt, this.clock);
     const paidAlone = toPaidAlone(input.paidAlone);
+    const paymentMethod = toPaymentMethod(input.paymentMethod);
     const description = input.description === undefined ? undefined : toDescription(input.description);
     const receiptId = input.receiptId ?? null;
     if (receiptId !== null && (typeof receiptId !== 'string' || receiptId.trim() === '')) {
@@ -56,6 +60,7 @@ export class CreateExpense {
       receiptId,
       amount,
       paidAlone,
+      paymentMethod,
       spentAt,
       description,
     });

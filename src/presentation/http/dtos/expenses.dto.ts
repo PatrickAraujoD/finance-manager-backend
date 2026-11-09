@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsString,
   IsUUID,
@@ -15,11 +16,14 @@ import {
   MAX_EXPENSE_OFFSET,
   MAX_EXPENSE_PAGE,
 } from '../../../application/use-cases/expenses/list-expenses';
+import { PaymentMethod } from '../../../domain/payment-method';
 import { CleanText } from './clean-text.decorator';
 
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 // Loose bound in UTF-16 units; the exact 500 character rule lives in the use case.
 const DESCRIPTION_BOUND = 1000;
+// Typed against the domain union so adding a method there forces this list to follow.
+const PAYMENT_METHODS: readonly PaymentMethod[] = ['CREDIT', 'DEBIT', 'PIX'];
 const present = (_: unknown, value: unknown) => value !== undefined;
 
 /** Body of POST /expenses. Unknown fields (userId, id, createdAt...) are rejected by the pipe. */
@@ -39,6 +43,10 @@ export class CreateExpenseDto {
 
   @IsBoolean()
   paidAlone!: boolean;
+
+  /** Required: CREDIT, DEBIT or PIX (exact, upper case). */
+  @IsIn(PAYMENT_METHODS)
+  paymentMethod!: PaymentMethod;
 
   /** `YYYY-MM-DD`; the use case checks that it is a real date and not too far ahead. */
   @IsString()
@@ -78,6 +86,10 @@ export class UpdateExpenseDto {
   @ValidateIf(present)
   @IsBoolean()
   paidAlone?: boolean;
+
+  @ValidateIf(present)
+  @IsIn(PAYMENT_METHODS)
+  paymentMethod?: PaymentMethod;
 }
 
 /** Query strings arrive as text: only plain digit strings become numbers, the rest fails IsInt. */
@@ -99,6 +111,10 @@ export class ListExpensesQueryDto {
   @ValidateIf(present)
   @IsUUID()
   categoryId?: string;
+
+  @ValidateIf(present)
+  @IsIn(PAYMENT_METHODS)
+  paymentMethod?: PaymentMethod;
 
   @ValidateIf(present)
   @digits

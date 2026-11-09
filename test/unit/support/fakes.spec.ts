@@ -27,6 +27,7 @@ const expense = (id: string, userId: string, categoryId: string, cents: number, 
     receiptId: null,
     amount: Money.fromCents(cents),
     paidAlone: true,
+    paymentMethod: 'PIX',
     spentAt: new Date(at),
   });
 
@@ -179,6 +180,7 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId,
       amount: Money.fromCents(100),
       paidAlone: true,
+      paymentMethod: 'PIX',
       spentAt: new Date('2026-11-01T00:00:00Z'),
     });
 
@@ -212,6 +214,7 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId: 'other',
       amount: Money.fromCents(999),
       paidAlone: false,
+      paymentMethod: 'PIX',
       spentAt: new Date('2026-10-01T00:00:00Z'),
       description: 'x',
     });
@@ -224,6 +227,7 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId: 'other',
       amount: Money.fromCents(999),
       paidAlone: false,
+      paymentMethod: 'PIX',
       spentAt: new Date('2026-10-01T00:00:00Z'),
       description: 'x',
     });

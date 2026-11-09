@@ -3,6 +3,7 @@ import { Category } from '../../../domain/entities/category';
 import { MAX_EXPENSE_CENTS } from '../../../domain/entities/expense';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
 import { Money } from '../../../domain/money';
+import { PaymentMethod, parsePaymentMethod } from '../../../domain/payment-method';
 import { requireCleanText } from '../../../domain/validation';
 import { Actor } from '../../actor';
 import { CategoryRepository } from '../../ports/category-repository';
@@ -55,6 +56,12 @@ export function toDescription(value: unknown): string | undefined {
 export function toPaidAlone(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new ValidationError('paidAlone must be true or false');
   return value;
+}
+
+/** CREDIT, DEBIT or PIX; anything else, including a missing value, is a 400. */
+export function toPaymentMethod(value: unknown): PaymentMethod {
+  if (typeof value !== 'string') throw new ValidationError('paymentMethod must be CREDIT, DEBIT or PIX');
+  return parsePaymentMethod(value);
 }
 
 /** A category the actor may use: global or their own. Anything else looks like a missing one. */

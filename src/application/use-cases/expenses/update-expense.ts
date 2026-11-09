@@ -1,5 +1,6 @@
 import { Expense } from '../../../domain/entities/expense';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
+import { PaymentMethod } from '../../../domain/payment-method';
 import { Actor } from '../../actor';
 import { CategoryRepository } from '../../ports/category-repository';
 import { Clock } from '../../ports/clock';
@@ -9,6 +10,7 @@ import {
   toAmount,
   toDescription,
   toPaidAlone,
+  toPaymentMethod,
   toSpentAt,
 } from './expense-input';
 import { findOwnExpense } from './get-expense';
@@ -20,6 +22,7 @@ export interface UpdateExpenseInput {
   spentAt?: string;
   description?: string;
   paidAlone?: boolean;
+  paymentMethod?: PaymentMethod;
 }
 
 export class UpdateExpense {
@@ -30,14 +33,17 @@ export class UpdateExpense {
   ) {}
 
   async execute(actor: Actor, id: string, input: UpdateExpenseInput): Promise<Expense> {
-    const { categoryId, amountCents, spentAt, description, paidAlone } = input;
-    if ([categoryId, amountCents, spentAt, description, paidAlone].every((v) => v === undefined)) {
+    const { categoryId, amountCents, spentAt, description, paidAlone, paymentMethod } = input;
+    if ([categoryId, amountCents, spentAt, description, paidAlone, paymentMethod].every(
+        (v) => v === undefined,
+      )) {
       throw new ValidationError('At least one field is required');
     }
     const amount = amountCents === undefined ? undefined : toAmount(amountCents);
     const date = spentAt === undefined ? undefined : toSpentAt(spentAt, this.clock);
     const text = description === undefined ? undefined : { value: toDescription(description) };
     const alone = paidAlone === undefined ? undefined : toPaidAlone(paidAlone);
+    const method = paymentMethod === undefined ? undefined : toPaymentMethod(paymentMethod);
     const current = await findOwnExpense(this.expenses, actor, id);
     const category =
       categoryId === undefined
@@ -51,6 +57,7 @@ export class UpdateExpense {
       categoryId: category?.id ?? current.categoryId,
       amount: amount ?? current.amount,
       paidAlone: alone ?? current.paidAlone,
+      paymentMethod: method ?? current.paymentMethod,
       spentAt: date ?? current.spentAt,
       description: text ? text.value : current.description,
       createdAt: current.createdAt,

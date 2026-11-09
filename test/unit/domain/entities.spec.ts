@@ -16,6 +16,7 @@ const expenseProps = {
   receiptId: null,
   amount: Money.fromCents(1050),
   paidAlone: true,
+  paymentMethod: 'PIX' as const,
   spentAt: new Date('2026-11-01T12:00:00Z'),
 };
 
@@ -32,6 +33,16 @@ describe('Expense', () => {
     const e = Expense.create(expenseProps);
     expect(e.amount.cents).toBe(1050);
     expect(e.description).toBeUndefined();
+  });
+
+  it.each(['CREDIT', 'DEBIT', 'PIX'] as const)('keeps the payment method %s', (paymentMethod) => {
+    expect(Expense.create({ ...expenseProps, paymentMethod }).paymentMethod).toBe(paymentMethod);
+  });
+
+  it.each(['', 'CASH', 'pix', undefined, null])('rejects the payment method %p', (v) => {
+    expect(() => Expense.create({ ...expenseProps, paymentMethod: v as never })).toThrow(
+      ValidationError,
+    );
   });
 
   it.each([0, -1])('rejects amount of %i cents', (cents) => {
