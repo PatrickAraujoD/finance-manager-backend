@@ -1,6 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
-import { requireCleanText, requireNonBlank } from '../validation';
+import { requireNonBlank } from '../validation';
 import { MAX_EXPENSE_CENTS } from './expense';
 
 export const MAX_BORROWER_NAME = 100;
