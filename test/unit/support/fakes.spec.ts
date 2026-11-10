@@ -449,6 +449,8 @@ describe('FakeReportRepository', () => {
         amount: Money.fromCents(10000),
         dueDate: new Date('2027-01-01T00:00:00Z'),
         expenseId: null,
+        paymentMethod: 'CASH',
+        lentAt: new Date('2000-01-01T00:00:00Z'),
       }),
     );
     for (const [id, cents, at] of [
