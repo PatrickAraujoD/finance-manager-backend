@@ -1,6 +1,6 @@
 {
   "name": "finance-manager-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "API REST de gestão financeira pessoal",
   "main": "dist/main.js",
   "directories": {
