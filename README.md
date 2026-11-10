@@ -2,7 +2,7 @@
 
 API REST de gestao financeira pessoal: cadastro e login seguros, salario mensal, comprovantes
 (PDF com texto ou imagem) com valor sugerido por extracao e SEMPRE confirmado pelo usuario,
-gastos por categoria e quatro relatorios para graficos. Os papeis sao `A` (admin) e `N` (normal);
+gastos por categoria, emprestimos, o saldo do cartao de credito e cinco relatorios. Os papeis sao `A` (admin) e `N` (normal);
 o admin gerencia usuarios e categorias globais, mas nao le gastos nem salario de ninguem.
 
 ## Arquitetura
@@ -33,6 +33,14 @@ npm run seed                    # primeiro admin, de ADMIN_EMAIL/ADMIN_PASSWORD 
 npm run start:dev               # API em http://localhost:3000 (ou `npm run build && npm start`)
 ```
 
+Migrations de 2026-11-10 (cartao de credito): `20261110100000_expense_payment_method_cash`
+(forma `CASH`), `20261110110000_expense_is_card_payment` (coluna `isCardPayment`) e
+`20261110120000_loan_payment_method` (colunas anulaveis `paymentMethod` e `lentAt` em `Loan`,
+preenchimento dos emprestimos diretos que ja existiam com `PIX` e a data de criacao, e um `CHECK`:
+emprestimo direto sempre tem os dois campos, o de um gasto nunca tem). **Quem aplicou uma versao
+anterior de `..._loan_payment_method` num banco local deve recriar o banco**: a migration foi
+editada antes de ser lancada.
+
 Requer Node >= 22.9 (`engines`). `npm start`, `npm run start:dev`, `npm run start:prod` e
 `npm run seed` carregam o `.env` com o suporte nativo do Node (`node --env-file-if-exists=.env`):
 se o arquivo nao existir, nada quebra (o Node so avisa) e a validacao de configuracao diz o que
@@ -62,7 +70,7 @@ node scripts/check-secrets.js       # falha se um .env ou segredo obvio estiver 
 
 ## Endpoints
 
-A API tem 33 rotas, todas em JSON (exceto o upload `multipart/form-data` e o download do
+A API tem 34 rotas, todas em JSON (exceto o upload `multipart/form-data` e o download do
 comprovante). Esta secao e a referencia completa: o que cada rota faz, o que ela recebe e o que
 devolve.
 
@@ -124,7 +132,34 @@ devolve.
 | GET | `/reports/by-category` | N, A | Grafico: para onde vai o dinheiro |
 | GET | `/reports/by-day` | N, A | Grafico: gasto por dia e dia de maior gasto |
 | GET | `/reports/monthly-evolution` | N, A | Grafico: evolucao mes a mes |
-| GET | `/reports/income-vs-spent` | N, A | Quanto do salario ja foi gasto |
+| GET | `/reports/income-vs-spent` | N, A | Quanto do salario saiu da conta e quanto foi recebido |
+| GET | `/reports/card` | N, A | Quanto o cartao de credito acumulou e quanto ja foi pago |
+
+### Como o dinheiro e contado: conta e cartao
+
+O sistema trata dois "dinheiros" separados:
+
+- **Conta** (`DEBIT`, `PIX`, `CASH`): o gasto tira do salario/saldo do mes na hora.
+- **Cartao** (`CREDIT`): a compra NAO tira do salario; ela so faz subir o valor do cartao.
+- **Pagar o cartao** = cadastrar um gasto com `isCardPayment: true` pago por `PIX`, `CASH` ou
+  `DEBIT` (nunca `CREDIT`, que responde `400`). Esse gasto sai do salario e baixa o valor do cartao.
+
+Exemplo, mes com renda de 5000,00:
+
+| Acontece | Disponivel na conta | Valor do cartao |
+|---|---|---|
+| Renda do mes | 5000 | 0 |
+| Compra de 1000 no credito | 5000 | 1000 |
+| Gasto de 200 no Pix | 4800 | 1000 |
+| Paga a fatura de 1000 por Pix (`isCardPayment: true`) | 3800 | 0 |
+| Recebe 100 em dinheiro de um emprestimo | 3900 | 0 |
+
+Decisoes do autor que valem para estas contas:
+- **Sem limite de credito e sem ciclo de fechamento de fatura.** O valor do cartao e acumulado:
+  cobrancas menos pagamentos de fatura, ate o fim do mes consultado.
+- **O cartao pode ficar negativo** (pagou a mais do que devia); nada impede isso.
+- **O saldo da conta e por mes**, sem sobra acumulada dos meses anteriores.
+- **Relatorios e `GET /reports/card` sao sempre do proprio usuario**; o admin nao ve os de outros.
 
 ### Saude
 
@@ -313,7 +348,17 @@ dos pagamentos, calculada numa unica consulta agregada.
   - `dueDate` (`YYYY-MM-DD`, data real do calendario, a partir de `2000-01-01`): pode estar no
     passado, para registrar uma divida antiga;
   - **exatamente um** entre `expenseId` (UUID de um gasto proprio; o valor e o do gasto) e
-    `amountCents` (inteiro de 1 a 1000000000). Os dois, ou nenhum, respondem `400`.
+    `amountCents` (inteiro de 1 a 1000000000). Os dois, ou nenhum, respondem `400`;
+  - `paymentMethod` (`CREDIT`, `DEBIT`, `PIX` ou `CASH`): **obrigatorio no emprestimo direto**
+    (com `amountCents`). **Mudanca incompativel:** clientes antigos que nao enviam o campo ao
+    emprestar direto passam a receber `400`;
+  - `lentAt` (`YYYY-MM-DD`, opcional no emprestimo direto; padrao hoje; de `2000-01-01` ate hoje + 1
+    dia em UTC): o dia em que o dinheiro saiu;
+  - com `expenseId`, `paymentMethod` e `lentAt` sao **proibidos** (`400`): o emprestimo herda os
+    dois do gasto. Um gasto que paga a fatura do cartao (`isCardPayment=true`) tambem nao pode
+    lastrear um emprestimo (`400`).
+- Efeito nos saldos: um emprestimo direto em `DEBIT`, `PIX` ou `CASH` sai da conta no mes de
+  `lentAt`; em `CREDIT` ele faz subir o valor do cartao, como uma compra no credito.
 - Resposta: `201 {"id": "<uuid>"}`.
 - Erros: `404` gasto inexistente ou de outro usuario; `409` o gasto ja tem um emprestimo; `400`
   campo invalido ou extra (`userId`, `id`...).
@@ -349,13 +394,15 @@ de `/loans/:id`, entao `summary` nunca e lido como id).
   somas sao em centavos inteiros e uma soma fora da faixa segura daria erro, nunca numero errado.
 
 **`GET /loans/:id`**. Devolve um emprestimo.
-- Resposta: `200 {"id","borrowerName","amountCents","dueDate","expenseId","paidCents","remainingCents","status","createdAt"}`.
-  `expenseId` e `null` no dinheiro emprestado direto. `status` e `PAID` (saldo zero), `OVERDUE`
+- Resposta: `200 {"id","borrowerName","amountCents","dueDate","expenseId","paymentMethod","lentAt","paidCents","remainingCents","status","createdAt"}`.
+  `expenseId` e `null` no dinheiro emprestado direto; `paymentMethod` e `lentAt` sao `null` quando
+  o emprestimo vem de um gasto (a forma e a data estao no gasto). `status` e `PAID` (saldo zero), `OVERDUE`
   (ha saldo e o vencimento ja passou) ou `OPEN` (ha saldo e vence hoje ou depois). Vencer hoje
   ainda e `OPEN`; o dia e o de calendario em UTC.
 
 **`PATCH /loans/:id`**. Corrige um emprestimo (parcial).
-- Corpo: ao menos um entre `borrowerName` e `dueDate`. O valor e o gasto de origem nao mudam (400).
+- Corpo: ao menos um entre `borrowerName` e `dueDate`. O valor, o gasto de origem, `paymentMethod`
+  e `lentAt` nao mudam (400).
 - Resposta: `200` com o emprestimo atualizado.
 
 **`DELETE /loans/:id`**. Exclui um emprestimo. Resposta: `204`. O gasto de origem continua e volta
@@ -391,15 +438,17 @@ responde `404`; o mesmo vale para os dois endpoints de pagamentos.
 
 ### Relatorios (`/reports`)
 
-Quatro rotas `GET` que alimentam os graficos. Todas olham **so os gastos do proprio usuario** e
-somam no banco. Parametro ausente, repetido, desconhecido ou fora do formato responde `400`.
-Valores em centavos, inteiros.
+Cinco rotas `GET`: tres alimentam graficos de gastos, `income-vs-spent` compara a conta com o
+salario e `card` mostra o cartao. Todas olham **so os dados do proprio usuario** (o admin nao ve os
+de outros) e somam no banco. Parametro ausente, repetido, desconhecido ou fora do formato responde
+`400`. Valores em centavos, inteiros.
 
-`by-category`, `by-day` e `monthly-evolution` **ignoram os gastos marcados como pagamento de
-fatura** (`isCardPayment=true`): a compra no credito ja entra neles quando e feita, e contar
-tambem o pagamento da fatura seria contar o mesmo dinheiro duas vezes. Compras `CREDIT`
-continuam contando. `income-vs-spent` ainda soma todos os gastos do mes, inclusive os pagamentos
-de fatura.
+`by-category`, `by-day` e `monthly-evolution` **ignoram os pagamentos de fatura**
+(`isCardPayment=true`) **e os emprestimos** (diretos ou nascidos de um gasto nao entram como
+emprestimo; o gasto de origem segue contando como gasto normal): a compra no credito ja entra
+neles quando e feita, e contar tambem o pagamento da fatura seria contar o mesmo dinheiro duas
+vezes. Compras `CREDIT` continuam contando. Por isso eles mostram "para onde foi o gasto" e **nao
+fecham com o `spentCents` de `income-vs-spent`**, que mede a saida da conta.
 
 **`GET /reports/by-category?month=2026-11`**: "para onde vai o dinheiro". Total por categoria no
 mes, da maior para a menor. `percentage` tem 2 casas e a soma e exatamente 100. Mes sem gastos:
@@ -429,18 +478,33 @@ do intervalo, com `0` nos meses sem gasto. `from <= to` e no maximo 24 meses (se
   {"month":"2026-02","totalCents":0}]}
 ```
 
-**`GET /reports/income-vs-spent?month=2026-11`**: quanto do salario ja foi gasto. Sem salario
-cadastrado, `incomeCents`, `remainingCents` e `percentSpent` vem `null`. `remainingCents` pode ser
-negativo e `percentSpent` pode passar de 100.
+**`GET /reports/income-vs-spent?month=2026-11`**: quanto do salario saiu da conta no mes.
+**Mudanca incompativel:** o significado de `spentCents` mudou e dois campos novos apareceram.
+- `spentCents`: **saida da conta** no mes = gastos `DEBIT`/`PIX`/`CASH` + pagamentos de fatura +
+  emprestimos diretos em nao-credito (pelo `lentAt`). Compra no credito nao entra aqui.
+- `receivedCents`: pagamentos de emprestimo recebidos no mes (pelo `paidAt`).
+- `creditSpentCents`: compras no credito + emprestimos diretos no credito do mes. E so
+  informativo: nao mexe em `remainingCents` nem em `percentSpent`.
+- `remainingCents = incomeCents - spentCents + receivedCents`; pode ser negativo.
+- `percentSpent` e calculado sobre `spentCents` e **ignora o recebido**; pode passar de 100.
+- Sem salario cadastrado, `incomeCents`, `remainingCents` e `percentSpent` vem `null`.
 
 ```json
-{"month":"2026-11","incomeCents":500000,"spentCents":125000,"remainingCents":375000,
- "percentSpent":25}
+{"month":"2026-11","incomeCents":500000,"spentCents":125000,"receivedCents":10000,
+ "creditSpentCents":100000,"remainingCents":385000,"percentSpent":25}
 ```
 
-Os tres relatorios de graficos (`by-category`, `by-day` e `monthly-evolution`) fecham o mesmo
-total para o mesmo mes (soma dos dias = soma das categorias = valor do mes na evolucao). O
-`spentCents` deste relatorio so coincide com eles enquanto nao houver pagamento de fatura no mes.
+**`GET /reports/card?month=2026-11`**: quanto o cartao de credito acumulou. Sem limite de credito
+e sem fechamento de fatura: o valor e acumulado ate o fim do mes consultado.
+
+```json
+{"month":"2026-11","openingCents":0,"chargedCents":100000,"paidCents":40000,"balanceCents":60000}
+```
+
+- `openingCents`: valor do cartao antes do mes (cobrancas menos pagamentos de fatura anteriores).
+- `chargedCents`: cobrancas do mes (compras `CREDIT` + emprestimos diretos em `CREDIT`).
+- `paidCents`: pagamentos de fatura do mes (gastos com `isCardPayment=true`).
+- `balanceCents = openingCents + chargedCents - paidCents`. Pode ficar negativo (pagou a mais).
 
 ### Limites de requisicao
 
@@ -611,6 +675,8 @@ Reavaliar ate 2027-02-08 (prazo registrado no gate).
   objeto/S3. Sem varredura de antivirus.
 - OCR so em portugues e sem PDF escaneado (PDF sem texto devolve sugestao `null`).
 - Uma unica moeda (BRL) e um unico salario por mes; gastos sem recorrencia nem anexo multiplo.
+- Cartao sem limite de credito nem fechamento de fatura; saldo da conta por mes, sem sobra
+  acumulada dos meses anteriores (ver "Como o dinheiro e contado").
 - Logs de texto simples; falta correlacao por requisicao, metricas e tracing.
 - As dependencias aceitas na auditoria devem ser revistas na proxima janela de upgrade
   (Prisma 7, `image-size` 2).

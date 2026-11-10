@@ -1,6 +1,6 @@
 # Status do projeto (visao do CTO)
 
-Ultima atualizacao: 2026-11-09 (emprestimos e forma de pagamento; contagens refeitas). Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
+Ultima atualizacao: 2026-11-10 (cartao de credito como saldo separado; contagens refeitas). Fonte detalhada: `docs/superpowers/plans/2026-11-08-finance-manager-backend.md`.
 
 ## Quadro de tarefas
 
@@ -14,12 +14,56 @@ Ultima atualizacao: 2026-11-09 (emprestimos e forma de pagamento; contagens refe
 | 6 | Renda mensal | aprovada |
 | 7 | Comprovantes e extracao (PDF, OCR), Partes A e B | aprovada |
 | 8 | Gastos | aprovada |
-| 9 | Relatorios (4 endpoints) | aprovada (correcoes de review: a9b6885, 09e14f7) |
+| 9 | Relatorios (4 endpoints iniciais; hoje 5, com `reports/card`) | aprovada (correcoes de review: a9b6885, 09e14f7) |
 | 10 | Endurecimento e fechamento (matriz de autorizacao, README final) | feita (f5495c4); o fluxo manual com curl NAO foi feito, coberto pelo e2e `user-journey` |
 | - | CI/CD (workflow, Dockerfile, dependabot, docs) | escrito pelo DevOps; workflow ainda NAO rodou no GitHub (`origin` sem push); imagem Docker construida e testada localmente (`docs/pipeline-status.md`) |
 | - | Forma de pagamento nas despesas (`paymentMethod`: `CREDIT`, `DEBIT`, `PIX`; obrigatoria; despesas antigas migradas como `PIX`) | feita na branch `feature/loans` |
 | - | Emprestimos (`/loans`: criar de um gasto ou em dinheiro, listar com filtros, ver, corrigir nome/vencimento, excluir; saldo e situacao `OPEN`/`PAID`/`OVERDUE` calculados no dominio). Pagamentos (`/loans/:id/payments`, dinheiro ou Pix com comprovante, soma travada no banco para nao passar do valor). Resumo por pessoa (`GET /loans/summary`: emprestado, pago, deve, a vencer, atrasado, proximo vencimento; teto de 500 pessoas com `truncated`) | feita na branch `feature/loans` |
-| - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens de 2026-11-09: 1424 unit / 219 integration passam e 1 falha conhecida (env-file, porta 3000 ocupada) de 220 / 725 e2e |
+| - | Cartao de credito como saldo separado (`CASH`, `isCardPayment`, emprestimo direto com `paymentMethod`/`lentAt`, `GET /reports/card`, novo `income-vs-spent`) | feita na branch `feature/credit-card`, que depende de `feature/loans`; o MR de loans deve vir primeiro |
+| - | Revisao final | em andamento: correcoes de audit gate, check-secrets, CI e docs aplicadas; contagens de 2026-11-10 (branch `feature/credit-card`): 1548 unit (57 suites) / 250 integration passam e 1 falha conhecida (env-file, porta 3000 ocupada) de 251 (17 suites) / 803 e2e (22 suites) |
+
+## Cartao de credito como saldo separado
+
+Entregue na branch `feature/credit-card` (3 migrations novas: `20261110100000_expense_payment_method_cash`,
+`20261110110000_expense_is_card_payment`, `20261110120000_loan_payment_method`; colunas anulaveis,
+preenchimento de `PIX` e `createdAt::date` nos emprestimos diretos existentes e um `CHECK`). Quem
+aplicou uma versao anterior de `..._loan_payment_method` num banco local deve recriar o banco (a
+migration foi editada antes de ser lancada).
+
+- Modelo de dois "dinheiros": a conta (`DEBIT`, `PIX`, `CASH`) tira do salario; o cartao (`CREDIT`)
+  so faz subir o valor do cartao. Pagar o cartao e cadastrar um gasto com `isCardPayment: true` pago
+  por `PIX`/`CASH`/`DEBIT` (com `CREDIT` responde 400); ele sai do salario e baixa o cartao.
+  Exemplo: renda 5000; compra no credito 1000 -> disponivel 5000, cartao 1000; Pix 200 -> 4800;
+  paga a fatura de 1000 por Pix -> 3800, cartao 0; recebe 100 em dinheiro de emprestimo -> 3900.
+- Gastos: `paymentMethod` ganhou `CASH`; `isCardPayment` opcional (padrao `false`) em POST/PATCH, na
+  resposta e no filtro `?isCardPayment=true|false`. Despesa de fatura nao pode lastrear emprestimo (400).
+- Emprestimos: `POST /loans` direto exige `paymentMethod`. **Mudanca incompativel:** sem ele agora
+  e 400. `lentAt` opcional (padrao hoje, no maximo hoje + 1 dia, piso `2000-01-01`); com `expenseId`
+  os dois sao proibidos (400) e as respostas trazem `null`. `PATCH` continua so nome e vencimento.
+- Relatorios: nova rota `GET /reports/card`; `income-vs-spent` mudou (**incompativel**): `spentCents`
+  e a saida da conta, com `receivedCents` e `creditSpentCents` novos e
+  `remainingCents = renda - spent + received`. `by-category`, `by-day` e `monthly-evolution` ignoram
+  pagamentos de fatura e emprestimos, entao nao fecham mais o mesmo total que `income-vs-spent`.
+- A API passou de 33 para 34 rotas (README e `authorization-matrix` conferidos).
+
+Decisoes do autor:
+- Sem limite de credito e sem ciclo de fechamento de fatura: o valor do cartao e acumulado
+  (cobrancas menos pagamentos de fatura) ate o fim do mes consultado.
+- O cartao pode ficar negativo (pagou a mais).
+- O saldo da conta e por mes, sem sobra acumulada dos meses anteriores.
+- `GET /reports/card` e os demais relatorios sao do proprio usuario; o admin nao ve os de outros.
+
+Dividas tecnicas conhecidas desta branch:
+- `Loan` nao tem indice para as novas consultas de relatorio por `(userId, lentAt)` / `paymentMethod`;
+  nao foi medido com `EXPLAIN`.
+- O relatorio na virada de ano (dez -> jan) tem teste de integracao (`prisma-report.repository.spec.ts`:
+  `accountOutflow`, `directLoansOutflow` e a evolucao mensal); nao foi conferido o caso do cartao
+  (`openingCents`) especificamente na virada.
+- O backfill das migrations foi verificado so manualmente (lendo o SQL); nao ha teste automatizado.
+- `tsc --noEmit` falha no commit historico `15671a2` (ja documentado acima).
+- `test/integration/env-file.spec.ts` depende da porta 3000 livre (falhou nesta rodada, 1 de 251).
+- O teste `pdf-hostile` (memoria) e instavel sob carga; nao falhou nesta rodada.
+- O helper `stable()` da `authorization-matrix` agora ignora o cabecalho `x-ratelimit-reset`.
 
 ## Emprestimos e forma de pagamento
 
