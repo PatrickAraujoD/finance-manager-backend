@@ -2,7 +2,7 @@ import { requireMonth } from '../../../domain/entities/monthly-income';
 import { Money } from '../../../domain/money';
 import { Actor } from '../../actor';
 import { ReportRepository } from '../../ports/report-repository';
-import { shareBasisPoints, toPercentage } from './basis-points';
+import { shareBasisPoints, toPercentage } from '../../../domain/basis-points';
 
 export interface CategoryReportItem {
   categoryId: string;

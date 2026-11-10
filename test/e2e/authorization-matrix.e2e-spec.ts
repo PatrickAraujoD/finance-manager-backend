@@ -51,6 +51,7 @@ const ROUTES: Record<string, { kind: Kind; scope: Scope }> = {
   'GET /reports/by-day': { kind: 'private', scope: 'self' },
   'GET /reports/monthly-evolution': { kind: 'private', scope: 'self' },
   'GET /reports/income-vs-spent': { kind: 'private', scope: 'self' },
+  'GET /reports/card': { kind: 'private', scope: 'self' },
 };
 
 const MONTH = '2026-11';
@@ -153,6 +154,7 @@ describe('authorization matrix', () => {
     'GET /reports/monthly-evolution': (a) =>
       withAuth(http().get('/reports/monthly-evolution?from=2026-01&to=2026-03'), a),
     'GET /reports/income-vs-spent': (a) => withAuth(http().get(`/reports/income-vs-spent?month=${MONTH}`), a),
+    'GET /reports/card': (a) => withAuth(http().get(`/reports/card?month=${MONTH}`), a),
   };
 
   const protectedRoutes = Object.entries(ROUTES).filter(([, r]) => r.kind !== 'public').map(([k]) => k);
@@ -464,7 +466,18 @@ describe('authorization matrix', () => {
     },
     'GET /reports/income-vs-spent': async (s) => {
       const res = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(s));
-      expect(res.body).toMatchObject({ incomeCents: null, spentCents: 0, remainingCents: null, percentSpent: null });
+      expect(res.body).toMatchObject({
+        incomeCents: null,
+        spentCents: 0,
+        receivedCents: 0,
+        creditSpentCents: 0,
+        remainingCents: null,
+        percentSpent: null,
+      });
+    },
+    'GET /reports/card': async (s) => {
+      const res = await http().get(`/reports/card?month=${MONTH}`).set(...bearer(s));
+      expect(res.body).toEqual({ month: MONTH, openingCents: 0, chargedCents: 0, paidCents: 0, balanceCents: 0 });
     },
   };
 
@@ -483,6 +496,17 @@ describe('authorization matrix', () => {
       expect(loanSummary.body.totals.totalLentCents).toBe(7700);
       const rep = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(w.bia));
       expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 4200 });
+      // Bia's card figures come from a credit purchase made here, so the zeros above are not vacuous.
+      const credit = await post('/expenses', w.bia, {
+        categoryId: w.bCategory,
+        amountCents: 3300,
+        paidAlone: true,
+        paymentMethod: 'CREDIT',
+        spentAt: '2026-11-04',
+      });
+      expect(credit.status).toBe(201);
+      const card = await http().get(`/reports/card?month=${MONTH}`).set(...bearer(w.bia));
+      expect(card.body).toEqual({ month: MONTH, openingCents: 0, chargedCents: 3300, paidCents: 0, balanceCents: 3300 });
       expect(PASSWORD).toBeDefined();
     });
   });

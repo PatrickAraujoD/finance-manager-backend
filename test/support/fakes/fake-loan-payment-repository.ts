@@ -61,6 +61,11 @@ export class FakeLoanPaymentRepository implements LoanPaymentRepository {
     return sums;
   }
 
+  /** Test support (not in the port): every payment of the user, for the report fake. */
+  async listByUser(userId: string): Promise<LoanPayment[]> {
+    return [...this.items.values()].filter((p) => p.userId === userId);
+  }
+
   async isReceiptUsed(receiptId: string): Promise<boolean> {
     return [...this.items.values()].some((p) => p.receiptId === receiptId);
   }

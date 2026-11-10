@@ -1,7 +1,7 @@
 import {
   ratioBasisPoints,
   shareBasisPoints,
-} from '../../../../src/application/use-cases/reports/basis-points';
+} from '../../../src/domain/basis-points';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 

@@ -53,6 +53,7 @@ describe('reports endpoints', () => {
     'by-day?month=2026-11',
     'monthly-evolution?from=2026-01&to=2026-03',
     'income-vs-spent?month=2026-11',
+    'card?month=2026-11',
   ];
 
   describe('authentication', () => {
@@ -87,6 +88,13 @@ describe('reports endpoints', () => {
       'income-vs-spent',
       'income-vs-spent?month=2026-13',
       'income-vs-spent?month=2026-11&month=2026-12',
+      'card',
+      'card?month=',
+      'card?month=2026-13',
+      'card?month=2026-1',
+      'card?month=2026-11&month=2026-12',
+      'card?month[]=2026-11',
+      'card?month=2026-11&extra=1',
       'monthly-evolution',
       'monthly-evolution?from=2026-01',
       'monthly-evolution?to=2026-03',
@@ -113,6 +121,7 @@ describe('reports endpoints', () => {
         `by-category?month=${m}`,
         `by-day?month=${m}`,
         `income-vs-spent?month=${m}`,
+        `card?month=${m}`,
         `monthly-evolution?from=${m}&to=${m}`,
         `monthly-evolution?from=2026-01&to=${m}`,
       ]) {
@@ -125,6 +134,7 @@ describe('reports endpoints', () => {
         `by-category?month=${m}`,
         `by-day?month=${m}`,
         `income-vs-spent?month=${m}`,
+        `card?month=${m}`,
         `monthly-evolution?from=${m}&to=${m}`,
       ]) {
         expect((await report(ana, path)).status).toBe(200);
@@ -284,6 +294,8 @@ describe('reports endpoints', () => {
         month: '2026-11',
         incomeCents: null,
         spentCents: 0,
+        receivedCents: 0,
+        creditSpentCents: 0,
         remainingCents: null,
         percentSpent: null,
       });
@@ -297,6 +309,8 @@ describe('reports endpoints', () => {
         month: '2026-11',
         incomeCents: 500000,
         spentCents: 125000,
+        receivedCents: 0,
+        creditSpentCents: 0,
         remainingCents: 375000,
         percentSpent: 25,
       });
@@ -310,9 +324,158 @@ describe('reports endpoints', () => {
     });
   });
 
+  describe('the account and the credit card (acceptance scenario)', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const month = today.slice(0, 7);
+    const earn = (s: Session, amountCents: number) =>
+      http().put(`/income/${month}`).set(...bearer(s)).send({ amountCents });
+    const buy = (s: Session, amountCents: number, paymentMethod: string, extra: object = {}) =>
+      http()
+        .post('/expenses')
+        .set(...bearer(s))
+        .send({ categoryId: global, amountCents, paidAlone: true, paymentMethod, spentAt: today, ...extra });
+    const account = async (s: Session) => (await report(s, `income-vs-spent?month=${month}`)).body;
+    const card = async (s: Session) => (await report(s, `card?month=${month}`)).body;
+
+    it('credit purchase, Pix, bill payment and a loan payment move the two balances as expected', async () => {
+      expect((await earn(ana, 500000)).status).toBe(200);
+
+      // A 1000.00 credit purchase raises the card and leaves the salary alone.
+      const credit = await buy(ana, 100000, 'CREDIT');
+      expect(credit.status).toBe(201);
+      expect(await account(ana)).toEqual({
+        month,
+        incomeCents: 500000,
+        spentCents: 0,
+        receivedCents: 0,
+        creditSpentCents: 100000,
+        remainingCents: 500000,
+        percentSpent: 0,
+      });
+      expect(await card(ana)).toEqual({
+        month,
+        openingCents: 0,
+        chargedCents: 100000,
+        paidCents: 0,
+        balanceCents: 100000,
+      });
+
+      // A 200.00 Pix expense comes out of the salary.
+      const pix = await buy(ana, 20000, 'PIX');
+      expect(pix.status).toBe(201);
+      expect(await account(ana)).toMatchObject({ spentCents: 20000, remainingCents: 480000 });
+      expect((await card(ana)).balanceCents).toBe(100000);
+
+      // Paying the bill by Pix leaves the account and brings the card to zero.
+      const bill = await buy(ana, 100000, 'PIX', { isCardPayment: true });
+      expect(bill.status).toBe(201);
+      expect(await account(ana)).toMatchObject({
+        spentCents: 120000,
+        creditSpentCents: 100000,
+        remainingCents: 380000,
+        percentSpent: 24,
+      });
+      expect(await card(ana)).toEqual({
+        month,
+        openingCents: 0,
+        chargedCents: 100000,
+        paidCents: 100000,
+        balanceCents: 0,
+      });
+
+      // Lending the Pix expense and receiving 100.00 in cash brings money back into the account.
+      const lent = await http()
+        .post('/loans')
+        .set(...bearer(ana))
+        .send({ borrowerName: 'Carlos', dueDate: '2099-01-01', expenseId: pix.body.id });
+      expect(lent.status).toBe(201);
+      const received = await http()
+        .post(`/loans/${lent.body.id}/payments`)
+        .set(...bearer(ana))
+        .send({ amountCents: 10000, method: 'CASH', paidAt: today });
+      expect(received.status).toBe(201);
+      expect(await account(ana)).toEqual({
+        month,
+        incomeCents: 500000,
+        spentCents: 120000,
+        receivedCents: 10000,
+        creditSpentCents: 100000,
+        remainingCents: 390000,
+        percentSpent: 24,
+      });
+      expect((await card(ana)).balanceCents).toBe(0);
+    });
+
+    it('a credit-card purchase that is lent still counts only once (credit, never the salary)', async () => {
+      await earn(ana, 500000);
+      const credit = await buy(ana, 30000, 'CREDIT');
+      const lent = await http()
+        .post('/loans')
+        .set(...bearer(ana))
+        .send({ borrowerName: 'Carlos', dueDate: '2099-01-01', expenseId: credit.body.id });
+      expect(lent.status).toBe(201);
+      expect(await account(ana)).toMatchObject({ spentCents: 0, remainingCents: 500000 });
+      expect((await card(ana)).balanceCents).toBe(30000);
+    });
+
+    it('paying the card bill with the card itself is refused (400) and changes nothing', async () => {
+      const res = await buy(ana, 40000, 'CREDIT', { isCardPayment: true });
+      expect(res.status).toBe(400);
+      expect(await card(ana)).toMatchObject({ chargedCents: 0, paidCents: 0, balanceCents: 0 });
+    });
+
+    it('the previous months feed the opening balance and later months are ignored', async () => {
+      await spend(ana, global, 5000, '2026-09-30', { method: 'CREDIT' });
+      await spend(ana, global, 2000, '2026-10-31', { isCardPayment: true });
+      await spend(ana, global, 700, '2026-11-01', { method: 'CREDIT' });
+      await spend(ana, global, 999, '2026-12-01', { method: 'CREDIT' });
+      expect((await report(ana, 'card?month=2026-11')).body).toEqual({
+        month: '2026-11',
+        openingCents: 3000,
+        chargedCents: 700,
+        paidCents: 0,
+        balanceCents: 3700,
+      });
+      expect((await report(ana, 'card?month=2026-12')).body).toMatchObject({
+        openingCents: 3700,
+        balanceCents: 4699,
+      });
+    });
+
+    it('overpaying the bill gives a negative balance instead of an error', async () => {
+      await spend(ana, global, 1000, '2026-11-01', { method: 'CREDIT' });
+      await spend(ana, global, 1500, '2026-11-02', { isCardPayment: true });
+      expect((await report(ana, 'card?month=2026-11')).body.balanceCents).toBe(-500);
+    });
+
+    it("never shows another user's purchases, payments or loan receipts, admin included", async () => {
+      await spend(bob, bobCat, 8000, '2026-11-02', { method: 'CREDIT' });
+      await spend(bob, bobCat, 3000, '2026-11-03', { isCardPayment: true });
+      await spend(ana, anaCat, 100, '2026-11-04', { method: 'CREDIT' });
+      expect((await report(ana, 'card?month=2026-11')).body).toMatchObject({
+        chargedCents: 100,
+        paidCents: 0,
+        balanceCents: 100,
+      });
+      expect((await report(bob, 'card?month=2026-11')).body.balanceCents).toBe(5000);
+      for (const path of ['card?month=2026-11', 'income-vs-spent?month=2026-11']) {
+        const res = await report(admin, path);
+        expect(res.status).toBe(200);
+        expect(JSON.stringify(res.body)).not.toMatch(/8000|3000|5000|\b100\b/);
+      }
+      expect((await report(admin, 'card?month=2026-11')).body).toEqual({
+        month: '2026-11',
+        openingCents: 0,
+        chargedCents: 0,
+        paidCents: 0,
+        balanceCents: 0,
+      });
+    });
+  });
+
   describe('consistency and isolation', () => {
-    // income-vs-spent is left out on purpose: it still sums every expense of the month, bill
-    // payments included, so it only matches the three grouped reports until it is reworked.
+    // income-vs-spent is left out on purpose: it measures what left the account (credit
+    // purchases out, bill payments in), so it does not match the three grouped reports.
     it('by-category, by-day and monthly-evolution agree on the total of the same month', async () => {
       for (let day = 1; day <= 28; day++) {
         await spend(ana, day % 2 ? global : anaCat, 100 + day, `2026-02-${String(day).padStart(2, '0')}`);
