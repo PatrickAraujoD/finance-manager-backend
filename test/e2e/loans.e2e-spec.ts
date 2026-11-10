@@ -421,6 +421,23 @@ describe('loans endpoints', () => {
       expect(await loanCount()).toBe(0);
     });
 
+    it("answers 404, not 400, when Bob uses Ana's card bill payment", async () => {
+      const bill = await http()
+        .post('/expenses')
+        .set(...bearer(ana))
+        .send({
+          categoryId: global,
+          amountCents: 10_000,
+          paidAlone: false,
+          paymentMethod: 'PIX',
+          isCardPayment: true,
+          spentAt: '2026-11-05',
+        });
+      const res = await post(bob, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: bill.body.id });
+      expect(res.status).toBe(404);
+      expect(await loanCount()).toBe(0);
+    });
+
     it('keeps each user loans to themselves', async () => {
       await post(ana, { ...base, paymentMethod: 'CREDIT' });
       await post(bob, { ...base, paymentMethod: 'CASH', lentAt: '2026-10-01' });

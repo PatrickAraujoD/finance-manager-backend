@@ -162,6 +162,20 @@ describe('CreateLoan', () => {
     expect(loans.all()).toHaveLength(0);
   });
 
+  it('answers NotFoundError (not 400) when Bob uses a card bill payment of Ana', async () => {
+    const { create, loans } = await setup();
+    // The bill-payment rule must not leak that the expense exists and what it is.
+    const foreign = await create
+      .execute(bob, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: 'e-bill' })
+      .catch((e) => e);
+    const missing = await create
+      .execute(bob, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: 'nope' })
+      .catch((e) => e);
+    expect(foreign).toBeInstanceOf(NotFoundError);
+    expect(foreign.message).toBe(missing.message);
+    expect(loans.all()).toHaveLength(0);
+  });
+
   it('does not let an admin lend against someone else expense', async () => {
     const { create } = await setup();
     await expect(
