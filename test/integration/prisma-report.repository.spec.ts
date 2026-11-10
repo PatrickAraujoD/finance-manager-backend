@@ -46,10 +46,17 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
   });
 
-  async function spend(userId: string, categoryId: string, cents: number, date: string) {
+  async function spend(
+    userId: string,
+    categoryId: string,
+    cents: number,
+    date: string,
+    how: { method?: 'CREDIT' | 'DEBIT' | 'PIX' | 'CASH'; isCardPayment?: boolean } = {},
+  ) {
     await prisma.client.$executeRaw`
-      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
-      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, 'PIX', ${date}::date)`;
+      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","isCardPayment","spentAt")
+      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, ${how.method ?? 'PIX'}::"PaymentMethod",
+        ${how.isCardPayment ?? false}, ${date}::date)`;
   }
 
   const cents = (rows: { total: { cents: number } }[]) => rows.map((r) => r.total.cents);
@@ -106,6 +113,51 @@ describe('PrismaReportRepository (Postgres)', () => {
         total,
       );
       expect((await repo.totalsByMonth('ana', '2026-11', '2026-11'))[0].total.cents).toBe(total);
+    });
+  });
+
+  describe('card bill payments', () => {
+    // A 1000 credit purchase is counted when it is made; paying the bill (Pix, 1000) must not
+    // count it again in the grouped reports.
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 1000, '2026-11-02', { method: 'CREDIT' });
+      await spend('ana', 'c-bus', 1000, '2026-11-10', { isCardPayment: true });
+      await spend('ana', 'c-bus', 300, '2026-11-11', { method: 'CASH' });
+      await spend('ana', 'c-food', 1000, '2026-10-10', { isCardPayment: true });
+      await spend('bob', 'c-food', 1000, '2026-11-10', { isCardPayment: true });
+    });
+
+    it('by category counts the credit purchase and ignores the bill payment', async () => {
+      const rows = await repo.totalsByCategory('ana', '2026-11');
+      expect(rows.map((r) => [r.categoryId, r.total.cents])).toEqual([
+        ['c-food', 1000],
+        ['c-bus', 300],
+      ]);
+    });
+
+    it('by day ignores the day that only has a bill payment', async () => {
+      const rows = await repo.totalsByDay('ana', '2026-11');
+      expect(rows.map((r) => [r.date, r.total.cents])).toEqual([
+        ['2026-11-02', 1000],
+        ['2026-11-11', 300],
+      ]);
+    });
+
+    it('monthly evolution ignores the bill payments of every month', async () => {
+      const rows = await repo.totalsByMonth('ana', '2026-10', '2026-11');
+      expect(rows.map((r) => [r.month, r.total.cents])).toEqual([['2026-11', 1300]]);
+      expect(await repo.totalsByMonth('bob', '2026-10', '2026-11')).toEqual([]);
+    });
+
+    it('the three grouped reports agree on the month total', async () => {
+      const byCategory = cents(await repo.totalsByCategory('ana', '2026-11')).reduce((a, b) => a + b);
+      const byDay = cents(await repo.totalsByDay('ana', '2026-11')).reduce((a, b) => a + b);
+      const byMonth = (await repo.totalsByMonth('ana', '2026-11', '2026-11'))[0].total.cents;
+      expect([byCategory, byDay, byMonth]).toEqual([1300, 1300, 1300]);
+    });
+
+    it('leaves totalSpent as it was: it still sums every expense of the month', async () => {
+      expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(2300);
     });
   });
 

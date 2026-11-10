@@ -32,6 +32,15 @@ describe('ByDay', () => {
     expect(report.topDay).toEqual({ date: '2026-11-10', totalCents: 450 });
   });
 
+  it('ignores card bill payments but counts the credit purchases they pay for', async () => {
+    const { w, byDay } = await setup();
+    await w.spend('ana', 'c1', 1000, '2026-11-02', { paymentMethod: 'CREDIT' });
+    await w.spend('ana', 'c2', 5000, '2026-11-10', { isCardPayment: true });
+    const report = await byDay.execute(ana, '2026-11');
+    expect(report.days).toEqual([{ date: '2026-11-02', totalCents: 1000 }]);
+    expect(report.topDay).toEqual({ date: '2026-11-02', totalCents: 1000 });
+  });
+
   it('the top day is the day with the largest total, not the largest single expense', async () => {
     const { w, byDay } = await setup();
     await w.spend('ana', 'c1', 900, '2026-11-01');

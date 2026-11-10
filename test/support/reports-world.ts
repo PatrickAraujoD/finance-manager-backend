@@ -2,6 +2,7 @@ import { Category } from '../../src/domain/entities/category';
 import { Expense } from '../../src/domain/entities/expense';
 import { MonthlyIncome } from '../../src/domain/entities/monthly-income';
 import { Money } from '../../src/domain/money';
+import { PaymentMethod } from '../../src/domain/payment-method';
 import { Role } from '../../src/domain/role';
 import { FakeCategoryRepository } from './fakes/fake-category-repository';
 import { FakeExpenseRepository } from './fakes/fake-expense-repository';
@@ -28,7 +29,13 @@ export function reportsWorld() {
     async category(id: string, name: string, ownerId: string | null = null): Promise<void> {
       await categories.save(Category.create({ id, name, ownerId }));
     },
-    async spend(userId: string, categoryId: string, cents: number, date: string): Promise<void> {
+    async spend(
+      userId: string,
+      categoryId: string,
+      cents: number,
+      date: string,
+      how: { paymentMethod?: PaymentMethod; isCardPayment?: boolean } = {},
+    ): Promise<void> {
       await expenses.save(
         Expense.create({
           id: `e${++counter}`,
@@ -37,8 +44,8 @@ export function reportsWorld() {
           receiptId: null,
           amount: Money.fromCents(cents),
           paidAlone: true,
-          paymentMethod: 'PIX',
-          isCardPayment: false,
+          paymentMethod: how.paymentMethod ?? 'PIX',
+          isCardPayment: how.isCardPayment ?? false,
           spentAt: new Date(`${date}T00:00:00Z`),
         }),
       );

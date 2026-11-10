@@ -35,6 +35,17 @@ describe('ByCategory', () => {
     });
   });
 
+  it('ignores card bill payments but counts the credit purchases they pay for', async () => {
+    const { w, byCategory } = await setup();
+    await w.spend('ana', 'c-food', 1000, '2026-11-02', { paymentMethod: 'CREDIT' });
+    await w.spend('ana', 'c-bus', 1000, '2026-11-10', { isCardPayment: true });
+    expect(await byCategory.execute(ana, '2026-11')).toEqual({
+      month: '2026-11',
+      totalCents: 1000,
+      items: [{ categoryId: 'c-food', categoryName: 'Food', totalCents: 1000, percentage: 100 }],
+    });
+  });
+
   it('percentages of 1/3 + 1/3 + 1/3 sum to exactly 100.00', async () => {
     const { w, byCategory } = await setup();
     await w.spend('ana', 'c-food', 100, '2026-11-01');
