@@ -11,6 +11,8 @@ const loan = (dueDate: string, cents = 10_000) =>
     amount: Money.fromCents(cents),
     dueDate: new Date(`${dueDate}T00:00:00Z`),
     expenseId: null,
+    paymentMethod: 'PIX',
+    lentAt: new Date('2026-11-01T00:00:00Z'),
   });
 
 // "Today" is a UTC day; the time of day inside it must not matter.

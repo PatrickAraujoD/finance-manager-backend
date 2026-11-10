@@ -34,3 +34,21 @@ export function toPaidAt(value: unknown, clock: Clock): Date {
   }
   return date;
 }
+
+/**
+ * The day the money left. Same ceiling as an expense date (today + 1 day, UTC, from the Clock) and
+ * the same floor as a due date; past dates are fine, a late registration is normal.
+ */
+export function toLentAt(value: unknown, clock: Clock): Date {
+  const date = toSpentAt(value, clock, 'lentAt');
+  if (date.getTime() < Date.parse(`${MIN_DUE_DATE}T00:00:00Z`)) {
+    throw new ValidationError(`lentAt cannot be before ${MIN_DUE_DATE}`);
+  }
+  return date;
+}
+
+/** Today (UTC) from the Clock, the default `lentAt`. */
+export function todayUtc(clock: Clock): Date {
+  const now = clock.now();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}

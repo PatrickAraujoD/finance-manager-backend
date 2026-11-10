@@ -10,11 +10,19 @@ const base = {
   amount: Money.fromCents(5000),
   dueDate: new Date('2026-12-10T00:00:00Z'),
   expenseId: null,
+  paymentMethod: 'PIX' as const,
+  lentAt: new Date('2026-11-08T00:00:00Z'),
 };
 
 describe('Loan', () => {
   it('creates a loan and exposes every field', () => {
-    const loan = Loan.create({ ...base, expenseId: 'e1', createdAt: new Date('2026-11-09T10:00:00Z') });
+    const loan = Loan.create({
+      ...base,
+      expenseId: 'e1',
+      paymentMethod: null,
+      lentAt: null,
+      createdAt: new Date('2026-11-09T10:00:00Z'),
+    });
     expect(loan.id).toBe('l1');
     expect(loan.userId).toBe('u1');
     expect(loan.borrowerName).toBe('Carlos');

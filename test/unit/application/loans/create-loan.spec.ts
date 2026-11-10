@@ -15,6 +15,7 @@ describe('CreateLoan', () => {
       borrowerName: 'Carlos',
       dueDate: '2026-12-10',
       amountCents: 15_000,
+      paymentMethod: 'PIX',
     });
     expect(result).toEqual({ id: 'id-1' });
     const loan = await loans.findById('ana', 'id-1');
@@ -43,13 +44,14 @@ describe('CreateLoan', () => {
       borrowerName: '  Carlos  ',
       dueDate: '2026-12-10',
       amountCents: 100,
+      paymentMethod: 'PIX',
     });
     expect((await loans.findById('ana', id))?.borrowerName).toBe('Carlos');
   });
 
   it('accepts a due date in the past, down to 2000-01-01', async () => {
     const { create } = await setup();
-    const input = { borrowerName: 'Carlos', amountCents: 100 };
+    const input = { borrowerName: 'Carlos', amountCents: 100, paymentMethod: 'PIX' as const };
     await expect(create.execute(ana, { ...input, dueDate: '2020-05-01' })).resolves.toBeDefined();
     await expect(create.execute(ana, { ...input, dueDate: '2000-01-01' })).resolves.toBeDefined();
   });
@@ -57,7 +59,12 @@ describe('CreateLoan', () => {
   it.each(['1999-12-31', '1950-01-01'])('rejects the due date %s as too old', async (dueDate) => {
     const { create, loans } = await setup();
     await expect(
-      create.execute(ana, { borrowerName: 'Carlos', dueDate, amountCents: 100 }),
+      create.execute(ana, {
+          borrowerName: 'Carlos',
+          dueDate,
+          amountCents: 100,
+          paymentMethod: 'PIX',
+        }),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(loans.all()).toHaveLength(0);
   });
@@ -67,7 +74,12 @@ describe('CreateLoan', () => {
     async (dueDate) => {
       const { create } = await setup();
       await expect(
-        create.execute(ana, { borrowerName: 'Carlos', dueDate, amountCents: 100 }),
+        create.execute(ana, {
+          borrowerName: 'Carlos',
+          dueDate,
+          amountCents: 100,
+          paymentMethod: 'PIX',
+        }),
       ).rejects.toBeInstanceOf(ValidationError);
     },
   );
@@ -98,6 +110,7 @@ describe('CreateLoan', () => {
           borrowerName: 'Carlos',
           dueDate: '2026-12-10',
           amountCents: amountCents as number,
+          paymentMethod: 'PIX',
         }),
       ).rejects.toBeInstanceOf(ValidationError);
     },
@@ -110,6 +123,7 @@ describe('CreateLoan', () => {
         borrowerName: 'Carlos',
         dueDate: '2026-12-10',
         amountCents: MAX_EXPENSE_CENTS,
+        paymentMethod: 'PIX',
       }),
     ).resolves.toBeDefined();
   });
@@ -119,7 +133,12 @@ describe('CreateLoan', () => {
     async (borrowerName) => {
       const { create, loans } = await setup();
       await expect(
-        create.execute(ana, { borrowerName, dueDate: '2026-12-10', amountCents: 100 }),
+        create.execute(ana, {
+          borrowerName,
+          dueDate: '2026-12-10',
+          amountCents: 100,
+          paymentMethod: 'PIX',
+        }),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(loans.all()).toHaveLength(0);
     },
@@ -162,7 +181,12 @@ describe('CreateLoan', () => {
 
   it('lets two people each lend money directly with the same name and amount', async () => {
     const { create, loans } = await setup();
-    const input = { borrowerName: 'Carlos', dueDate: '2026-12-10', amountCents: 100 };
+    const input = {
+      borrowerName: 'Carlos',
+      dueDate: '2026-12-10',
+      amountCents: 100,
+      paymentMethod: 'PIX' as const,
+    };
     await create.execute(ana, input);
     await create.execute(ana, input);
     await create.execute(bob, input);
@@ -175,6 +199,7 @@ describe('CreateLoan', () => {
       borrowerName: 'Carlos',
       dueDate: '2026-12-10',
       amountCents: 100,
+      paymentMethod: 'PIX',
       userId: 'ana',
     } as never);
     expect((await loans.findById('bob', id))?.userId).toBe('bob');

@@ -51,7 +51,7 @@ describe('GET /loans/summary', () => {
       await http()
         .post('/loans')
         .set(...bearer(s))
-        .send({ borrowerName, dueDate, amountCents })
+        .send({ borrowerName, dueDate, amountCents, paymentMethod: 'PIX' })
     ).body.id as string;
   const pay = (s: Session, id: string, body: object) =>
     http()

@@ -28,9 +28,13 @@ import {
   providers: [
     {
       provide: CreateLoan,
-      inject: [LOAN_REPOSITORY, EXPENSE_REPOSITORY, ID_GENERATOR],
-      useFactory: (loans: LoanRepository, expenses: ExpenseRepository, ids: IdGenerator) =>
-        new CreateLoan(loans, expenses, ids),
+      inject: [LOAN_REPOSITORY, EXPENSE_REPOSITORY, ID_GENERATOR, CLOCK],
+      useFactory: (
+        loans: LoanRepository,
+        expenses: ExpenseRepository,
+        ids: IdGenerator,
+        clock: Clock,
+      ) => new CreateLoan(loans, expenses, ids, clock),
     },
     {
       provide: UpdateLoan,

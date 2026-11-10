@@ -16,6 +16,8 @@ function entry(name: string, dueDate: string, cents: number, paid = 0, createdAt
     amount: Money.fromCents(cents),
     dueDate: new Date(`${dueDate}T00:00:00Z`),
     expenseId: null,
+    paymentMethod: 'PIX',
+    lentAt: new Date('2026-11-01T00:00:00Z'),
     createdAt: createdAt ? new Date(createdAt) : null,
   });
   return { loan, balance: computeLoanBalance(loan, Money.fromCents(paid), NOW) };

@@ -82,6 +82,10 @@ export interface LoanView {
   /** Calendar date, `YYYY-MM-DD`. */
   dueDate: string;
   expenseId: string | null;
+  /** How the money left; null when the loan comes from an expense (it inherits the expense's). */
+  paymentMethod: PaymentMethod | null;
+  /** Calendar date, `YYYY-MM-DD`; null like paymentMethod. */
+  lentAt: string | null;
   paidCents: number;
   remainingCents: number;
   status: LoanStatus;
@@ -96,6 +100,8 @@ export function toLoanView({ loan, balance }: LoanDetails): LoanView {
     amountCents: loan.amount.cents,
     dueDate: formatCalendarDate(loan.dueDate),
     expenseId: loan.expenseId,
+    paymentMethod: loan.paymentMethod,
+    lentAt: loan.lentAt ? formatCalendarDate(loan.lentAt) : null,
     paidCents: balance.paid.cents,
     remainingCents: balance.remaining.cents,
     status: balance.status,

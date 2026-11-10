@@ -47,7 +47,7 @@ describe('loan payments endpoints', () => {
       await http()
         .post('/loans')
         .set(...bearer(s))
-        .send({ borrowerName: 'Carlos', dueDate, amountCents })
+        .send({ borrowerName: 'Carlos', dueDate, amountCents, paymentMethod: 'PIX' })
     ).body.id;
   const loan = (s: Session, id: string) => http().get(`/loans/${id}`).set(...bearer(s));
   const pay = (s: Session, id: string, body: object) =>

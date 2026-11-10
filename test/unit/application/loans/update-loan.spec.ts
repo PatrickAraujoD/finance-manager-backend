@@ -5,7 +5,7 @@ import { admin, ana, bob, loansWorld } from './support';
 
 async function setup() {
   const world = await loansWorld();
-  const create = new CreateLoan(world.loans, world.expenses, world.ids);
+  const create = new CreateLoan(world.loans, world.expenses, world.ids, world.clock);
   const { id } = await create.execute(ana, {
     borrowerName: 'Carlos',
     dueDate: '2026-12-10',

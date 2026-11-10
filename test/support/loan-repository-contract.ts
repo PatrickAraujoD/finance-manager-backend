@@ -35,8 +35,9 @@ export function loan(
     amount: Money.fromCents(over.cents ?? 5000),
     dueDate: day(over.dueDate ?? '2026-12-10'),
     expenseId: over.expenseId ?? null,
-    paymentMethod: over.paymentMethod ?? null,
-    lentAt: over.lentAt ? day(over.lentAt) : null,
+    // Direct loans must say how and when; a loan from an expense must not.
+    paymentMethod: over.paymentMethod ?? (over.expenseId ? null : 'PIX'),
+    lentAt: over.lentAt ? day(over.lentAt) : over.expenseId ? null : day('2026-11-08'),
   });
 }
 

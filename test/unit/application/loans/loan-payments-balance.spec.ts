@@ -10,10 +10,10 @@ import { admin, ana, bob, loansWorld } from './support';
 // "Today" is 2026-11-08 (the FixedClock default).
 async function setup() {
   const w = await loansWorld();
-  const create = new CreateLoan(w.loans, w.expenses, w.ids);
+  const create = new CreateLoan(w.loans, w.expenses, w.ids, w.clock);
   const pay = new RegisterLoanPayment(w.loans, w.payments, w.receipts, w.expenses, w.ids, w.clock);
   const lend = async (who: typeof ana, dueDate: string, amountCents = 10_000) =>
-    (await create.execute(who, { borrowerName: 'Carlos', dueDate, amountCents })).id;
+    (await create.execute(who, { borrowerName: 'Carlos', dueDate, amountCents, paymentMethod: 'PIX' })).id;
   const cash = (who: typeof ana, loanId: string, amountCents: number) =>
     pay.execute(who, { loanId, amountCents, method: 'CASH', paidAt: '2026-11-08' });
   return {

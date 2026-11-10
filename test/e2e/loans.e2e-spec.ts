@@ -68,7 +68,7 @@ describe('loans endpoints', () => {
   const del = (s: Session, id: string) => http().delete(`/loans/${id}`).set(...bearer(s));
   const list = (s: Session, query = '') => http().get(`/loans${query}`).set(...bearer(s));
   const lend = (s: Session, borrowerName: string, dueDate: string, amountCents = 1000) =>
-    post(s, { borrowerName, dueDate, amountCents });
+    post(s, { borrowerName, dueDate, amountCents, paymentMethod: 'PIX' });
 
   async function loanCount(): Promise<number> {
     return t.prisma.client.loan.count();
@@ -197,7 +197,7 @@ describe('loans endpoints', () => {
   });
 
   describe('validation (400)', () => {
-    const base = { borrowerName: 'Carlos', dueDate: '2026-12-10' };
+    const base = { borrowerName: 'Carlos', dueDate: '2026-12-10', paymentMethod: 'PIX' };
 
     it.each([
       ['neither expenseId nor amountCents', {}],

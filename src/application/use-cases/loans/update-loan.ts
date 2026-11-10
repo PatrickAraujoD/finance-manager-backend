@@ -36,6 +36,8 @@ export class UpdateLoan {
       amount: current.amount,
       dueDate: date ?? current.dueDate,
       expenseId: current.expenseId,
+      paymentMethod: current.paymentMethod,
+      lentAt: current.lentAt,
       createdAt: current.createdAt,
     });
     // False means the loan vanished between the read and the write (concurrent delete).

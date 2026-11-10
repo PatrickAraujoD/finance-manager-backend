@@ -9,11 +9,12 @@ import { admin, ana, bob, loansWorld } from './support';
 // "Today" is 2026-11-08 (the FixedClock default). Ana's loan is 10000 cents.
 async function setup() {
   const world = await loansWorld();
-  const create = new CreateLoan(world.loans, world.expenses, world.ids);
+  const create = new CreateLoan(world.loans, world.expenses, world.ids, world.clock);
   const { id: loanId } = await create.execute(ana, {
     borrowerName: 'Carlos',
     dueDate: '2026-12-10',
     amountCents: 10_000,
+    paymentMethod: 'PIX',
   });
   const pay = new RegisterLoanPayment(
     world.loans,

@@ -13,7 +13,7 @@ async function setup() {
   const world = await loansWorld();
   return {
     ...world,
-    create: new CreateLoan(world.loans, world.expenses, world.ids),
+    create: new CreateLoan(world.loans, world.expenses, world.ids, world.clock),
     get: new GetLoan(world.loans, world.payments, world.clock),
     list: new ListLoans(world.loans, world.payments, world.clock),
   };
@@ -24,6 +24,7 @@ const lend = (name: string, dueDate: string, amountCents = 1000) => ({
   borrowerName: name,
   dueDate,
   amountCents,
+  paymentMethod: 'PIX' as const,
 });
 
 describe('GetLoan', () => {

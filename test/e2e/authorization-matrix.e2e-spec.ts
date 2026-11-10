@@ -97,7 +97,7 @@ describe('authorization matrix', () => {
       })
     ).body.id;
     const bLoan = (
-      await post('/loans', bia, { borrowerName: 'Devedor da Bia', dueDate: '2026-12-10', amountCents: 7700 })
+      await post('/loans', bia, { borrowerName: 'Devedor da Bia', dueDate: '2026-12-10', amountCents: 7700, paymentMethod: 'PIX' })
     ).body.id;
     const bReceipt = randomUUID();
     await t.prisma.client.receipt.create({
