@@ -82,6 +82,38 @@ describe('PrismaLoanRepository (Postgres specifics)', () => {
     await expect(insert(1_000_000_000n)).resolves.toBeDefined();
   });
 
+  it('refuses, in the database itself, a payment method and a lent date out of step with the expense', async () => {
+    const insert = (
+      id: string,
+      expenseId: string | null,
+      paymentMethod: 'PIX' | null,
+      lentAt: string | null,
+    ) =>
+      prisma.client.loan.create({
+        data: {
+          id,
+          userId: 'u1',
+          borrowerName: 'Carlos',
+          amountCents: 100n,
+          dueDate: new Date('2026-12-10T00:00:00Z'),
+          expenseId,
+          paymentMethod,
+          lentAt: lentAt ? new Date(`${lentAt}T00:00:00Z`) : null,
+        },
+      });
+    // Direct loan: both are mandatory, one is not enough.
+    await expect(insert('x1', null, null, null)).rejects.toThrow();
+    await expect(insert('x2', null, 'PIX', null)).rejects.toThrow();
+    await expect(insert('x3', null, null, '2026-11-08')).rejects.toThrow();
+    // Loan from an expense: neither is allowed.
+    await expect(insert('x4', 'e1', 'PIX', null)).rejects.toThrow();
+    await expect(insert('x5', 'e1', null, '2026-11-08')).rejects.toThrow();
+    await expect(insert('x6', 'e1', 'PIX', '2026-11-08')).rejects.toThrow();
+    // The two valid shapes still go in.
+    await expect(insert('ok1', null, 'PIX', '2026-11-08')).resolves.toBeDefined();
+    await expect(insert('ok2', 'e1', null, null)).resolves.toBeDefined();
+  });
+
   it('keeps an expense that has a loan: deleting it answers ConflictError', async () => {
     await repo.save(loan('l1', { expenseId: 'e1' }));
     const expenses = new PrismaExpenseRepository(prisma);
