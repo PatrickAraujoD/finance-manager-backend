@@ -163,8 +163,11 @@ describe('authorization matrix', () => {
   const stable = (headers: Record<string, unknown>) => {
     const h = { ...headers };
     delete h['date'];
-    // The remaining-requests counters go down with every request by design.
-    for (const k of Object.keys(h)) if (k.startsWith('x-ratelimit-remaining')) delete h[k];
+    // The remaining-requests counters go down with every request by design, and the reset
+    // countdown moves with the clock (it can differ by a second between two requests).
+    for (const k of Object.keys(h)) {
+      if (k.startsWith('x-ratelimit-remaining') || k.startsWith('x-ratelimit-reset')) delete h[k];
+    }
     return h;
   };
   const same = (a: request.Response, b: request.Response) => {
