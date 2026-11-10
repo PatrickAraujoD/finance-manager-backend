@@ -1,5 +1,6 @@
 import { ValidationError } from '../errors';
 import { Money } from '../money';
+import { PaymentMethod } from '../payment-method';
 import { requireNonBlank } from '../validation';
 import { MAX_EXPENSE_CENTS } from './expense';
 
@@ -14,6 +15,10 @@ export interface LoanProps {
   dueDate: Date;
   /** The expense this loan was created from; null for money lent directly. Never changes. */
   expenseId: string | null;
+  /** How the money left, for money lent directly; null for a loan born from an expense. */
+  paymentMethod?: PaymentMethod | null;
+  /** A calendar date (normalized to 00:00 UTC): when the money left; null like paymentMethod. */
+  lentAt?: Date | null;
   /** Set by the database; null until the loan is persisted. */
   createdAt?: Date | null;
 }
@@ -46,6 +51,8 @@ export class Loan {
       amount: input.amount,
       dueDate: toUtcDay(input.dueDate),
       expenseId: input.expenseId,
+      paymentMethod: input.paymentMethod ?? null,
+      lentAt: input.lentAt ? toUtcDay(input.lentAt) : null,
       createdAt: input.createdAt ? new Date(input.createdAt.getTime()) : null,
     });
   }
@@ -67,6 +74,12 @@ export class Loan {
   }
   get expenseId(): string | null {
     return this.props.expenseId;
+  }
+  get paymentMethod(): PaymentMethod | null {
+    return this.props.paymentMethod;
+  }
+  get lentAt(): Date | null {
+    return this.props.lentAt ? new Date(this.props.lentAt.getTime()) : null;
   }
   get createdAt(): Date | null {
     return this.props.createdAt ? new Date(this.props.createdAt.getTime()) : null;

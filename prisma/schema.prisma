@@ -147,6 +147,10 @@ model Loan {
   // Calendar date (no time zone).
   dueDate      DateTime @db.Date
   expenseId    String?  @unique
+  // Only for money lent directly (expenseId null): how it left and the day it left. A loan born
+  // from an expense inherits both from the expense, so both stay NULL (a CHECK in the migration).
+  paymentMethod PaymentMethod?
+  lentAt       DateTime? @db.Date
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expense      Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)

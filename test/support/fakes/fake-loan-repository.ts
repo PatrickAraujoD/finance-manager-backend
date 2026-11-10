@@ -28,6 +28,8 @@ export class FakeLoanRepository implements LoanRepository {
         amount: current.amount,
         dueDate: loan.dueDate,
         expenseId: current.expenseId,
+        paymentMethod: current.paymentMethod,
+        lentAt: current.lentAt,
         createdAt: current.createdAt,
       }),
     );
@@ -66,6 +68,8 @@ export class FakeLoanRepository implements LoanRepository {
       amount: loan.amount,
       dueDate: loan.dueDate,
       expenseId: loan.expenseId,
+      paymentMethod: loan.paymentMethod,
+      lentAt: loan.lentAt,
       createdAt: new Date(),
     });
   }

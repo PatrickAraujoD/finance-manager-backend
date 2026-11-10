@@ -22,6 +22,9 @@ function toDomain(row: LoanRow): Loan {
     // DATE column: Prisma returns 00:00 UTC of the stored day.
     dueDate: row.dueDate,
     expenseId: row.expenseId,
+    paymentMethod: row.paymentMethod,
+    // DATE column, like dueDate.
+    lentAt: row.lentAt,
     createdAt: row.createdAt,
   });
 }
@@ -57,6 +60,8 @@ export class PrismaLoanRepository implements LoanRepository {
           amountCents: BigInt(loan.amount.cents),
           dueDate: loan.dueDate,
           expenseId: loan.expenseId,
+          paymentMethod: loan.paymentMethod,
+          lentAt: loan.lentAt,
         },
       });
     } catch (error) {
