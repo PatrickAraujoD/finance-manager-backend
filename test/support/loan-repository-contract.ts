@@ -2,6 +2,7 @@ import { LoanRepository } from '../../src/application/ports/loan-repository';
 import { Loan } from '../../src/domain/entities/loan';
 import { ConflictError } from '../../src/domain/errors';
 import { Money } from '../../src/domain/money';
+import { PaymentMethod } from '../../src/domain/payment-method';
 
 /**
  * What a LoanRepository implementation must do, run against the in-memory fake (unit) and the
@@ -23,6 +24,8 @@ export function loan(
     cents: number;
     dueDate: string;
     expenseId: string | null;
+    paymentMethod: PaymentMethod | null;
+    lentAt: string | null;
   }> = {},
 ): Loan {
   return Loan.create({
@@ -32,6 +35,8 @@ export function loan(
     amount: Money.fromCents(over.cents ?? 5000),
     dueDate: day(over.dueDate ?? '2026-12-10'),
     expenseId: over.expenseId ?? null,
+    paymentMethod: over.paymentMethod ?? null,
+    lentAt: over.lentAt ? day(over.lentAt) : null,
   });
 }
 
@@ -59,6 +64,27 @@ export function describeLoanRepositoryContract(
       expect(found?.createdAt).toBeInstanceOf(Date);
       expect(await repo.findById('u2', 'l1')).toBeNull();
       expect(await repo.findById('u1', 'missing')).toBeNull();
+    });
+
+    it('round-trips the payment method and the lent date', async () => {
+      await repo.save(loan('l1', { paymentMethod: 'CREDIT', lentAt: '2026-11-08' }));
+      await repo.save(loan('l2', { expenseId: 'e1' }));
+      const direct = await repo.findById('u1', 'l1');
+      expect(direct?.paymentMethod).toBe('CREDIT');
+      expect(direct?.lentAt?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+      const fromExpense = await repo.findById('u1', 'l2');
+      expect(fromExpense?.paymentMethod).toBeNull();
+      expect(fromExpense?.lentAt).toBeNull();
+    });
+
+    it('keeps the payment method and the lent date when the loan is updated', async () => {
+      await repo.save(loan('l1', { paymentMethod: 'PIX', lentAt: '2026-11-08' }));
+      await repo.update(
+        loan('l1', { borrowerName: 'Maria', paymentMethod: 'CASH', lentAt: '2026-01-01' }),
+      );
+      const found = await repo.findById('u1', 'l1');
+      expect(found?.paymentMethod).toBe('PIX');
+      expect(found?.lentAt?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
     });
 
     it('rejects a duplicate id with ConflictError', async () => {

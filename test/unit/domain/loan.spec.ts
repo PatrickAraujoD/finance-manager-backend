@@ -24,6 +24,16 @@ describe('Loan', () => {
     expect(loan.createdAt?.toISOString()).toBe('2026-11-09T10:00:00.000Z');
   });
 
+  it('keeps the payment method and the lent date of money lent directly', () => {
+    const loan = Loan.create({
+      ...base,
+      paymentMethod: 'CREDIT',
+      lentAt: new Date('2026-11-08T18:30:00Z'),
+    });
+    expect(loan.paymentMethod).toBe('CREDIT');
+    expect(loan.lentAt?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+  });
+
   it('has no createdAt until persisted', () => {
     expect(Loan.create(base).createdAt).toBeNull();
   });
