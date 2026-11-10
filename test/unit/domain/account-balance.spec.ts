@@ -109,7 +109,7 @@ describe('computeAccountBalance', () => {
       computeAccountBalance({ income: null, outflows: [big, m(1)], inflows: [], creditPurchases: [] }),
     ).toThrow(ValidationError);
     expect(() =>
-      computeAccountBalance({ income: m(1), outflows: [big], inflows: [big], creditPurchases: [] }),
+      computeAccountBalance({ income: big, outflows: [], inflows: [big], creditPurchases: [] }),
     ).toThrow(ValidationError);
   });
 });
