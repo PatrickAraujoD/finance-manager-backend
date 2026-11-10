@@ -41,6 +41,20 @@ export async function loansWorld() {
       }),
     );
   }
+  // A credit card bill payment: it cannot back a loan.
+  await expenses.save(
+    Expense.create({
+      id: 'e-bill',
+      userId: 'ana',
+      categoryId: 'c1',
+      receiptId: null,
+      amount: Money.fromCents(10_000),
+      paidAlone: false,
+      paymentMethod: 'PIX',
+      isCardPayment: true,
+      spentAt: new Date('2026-11-02T00:00:00Z'),
+    }),
+  );
   for (const [id, userId] of [
     ['r-ana', 'ana'],
     ['r-ana-2', 'ana'],

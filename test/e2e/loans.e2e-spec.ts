@@ -17,7 +17,9 @@ const VIEW_FIELDS = [
   'dueDate',
   'expenseId',
   'id',
+  'lentAt',
   'paidCents',
+  'paymentMethod',
   'remainingCents',
   'status',
 ];
@@ -327,6 +329,105 @@ describe('loans endpoints', () => {
       expect((await http().get(`/expenses/${expenseId}`).set(...bearer(ana))).status).toBe(200);
       await del(ana, id);
       expect((await http().delete(`/expenses/${expenseId}`).set(...bearer(ana))).status).toBe(204);
+    });
+  });
+
+  describe('payment method and lent date', () => {
+    const base = { borrowerName: 'Carlos', dueDate: '2026-12-10', amountCents: 15_000 };
+
+    it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'])('lends directly with %s', async (paymentMethod) => {
+      const created = await post(ana, { ...base, paymentMethod, lentAt: '2026-11-05' });
+      expect(created.status).toBe(201);
+      const read = await get(ana, created.body.id);
+      expect(Object.keys(read.body).sort()).toEqual(VIEW_FIELDS);
+      expect(read.body).toMatchObject({ paymentMethod, lentAt: '2026-11-05', expenseId: null });
+      expect((await list(ana)).body.items).toEqual([read.body]);
+    });
+
+    it('defaults the lent date to today', async () => {
+      const created = await post(ana, { ...base, paymentMethod: 'PIX' });
+      expect(created.status).toBe(201);
+      expect((await get(ana, created.body.id)).body.lentAt).toBe(dayFromToday(0));
+    });
+
+    it('shows no payment method and no lent date on a loan born from an expense', async () => {
+      const expenseId = await expense(ana);
+      const created = await post(ana, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId });
+      expect((await get(ana, created.body.id)).body).toMatchObject({
+        expenseId,
+        paymentMethod: null,
+        lentAt: null,
+      });
+    });
+
+    it('does not change on PATCH, and PATCH refuses to change them', async () => {
+      const { id } = (await post(ana, { ...base, paymentMethod: 'CASH', lentAt: '2026-11-05' })).body;
+      expect((await patch(ana, id, { borrowerName: 'Maria' })).body).toMatchObject({
+        paymentMethod: 'CASH',
+        lentAt: '2026-11-05',
+      });
+      expect((await patch(ana, id, { paymentMethod: 'PIX' })).status).toBe(400);
+      expect((await patch(ana, id, { lentAt: '2026-11-06' })).status).toBe(400);
+    });
+
+    it.each([
+      ['no paymentMethod', {}],
+      ['a null paymentMethod', { paymentMethod: null }],
+      ['an unknown paymentMethod', { paymentMethod: 'BOLETO' }],
+      ['a lowercase paymentMethod', { paymentMethod: 'pix' }],
+      ['a numeric paymentMethod', { paymentMethod: 1 }],
+      ['a lentAt with time', { paymentMethod: 'PIX', lentAt: '2026-11-05T00:00:00Z' }],
+      ['a non-existent lentAt', { paymentMethod: 'PIX', lentAt: '2026-02-30' }],
+      ['a lentAt before 2000', { paymentMethod: 'PIX', lentAt: '1999-12-31' }],
+      ['a lentAt beyond tomorrow', { paymentMethod: 'PIX', lentAt: dayFromToday(2) }],
+    ])('rejects %s', async (_label, extra) => {
+      expect((await post(ana, { ...base, ...extra })).status).toBe(400);
+      expect(await loanCount()).toBe(0);
+    });
+
+    it('accepts a lentAt of tomorrow', async () => {
+      const res = await post(ana, { ...base, paymentMethod: 'PIX', lentAt: dayFromToday(1) });
+      expect(res.status).toBe(201);
+    });
+
+    it('rejects a paymentMethod or a lentAt together with an expenseId', async () => {
+      const expenseId = await expense(ana);
+      const fromExpense = { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId };
+      for (const extra of [
+        { paymentMethod: 'PIX' },
+        { lentAt: '2026-11-05' },
+        { paymentMethod: 'PIX', lentAt: '2026-11-05' },
+      ]) {
+        expect((await post(ana, { ...fromExpense, ...extra })).status).toBe(400);
+      }
+      expect(await loanCount()).toBe(0);
+    });
+
+    it('rejects an expense that pays the credit card bill', async () => {
+      const bill = await http()
+        .post('/expenses')
+        .set(...bearer(ana))
+        .send({
+          categoryId: global,
+          amountCents: 10_000,
+          paidAlone: false,
+          paymentMethod: 'PIX',
+          isCardPayment: true,
+          spentAt: '2026-11-05',
+        });
+      expect(bill.status).toBe(201);
+      const res = await post(ana, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: bill.body.id });
+      expect(res.status).toBe(400);
+      expect(await loanCount()).toBe(0);
+    });
+
+    it('keeps each user loans to themselves', async () => {
+      await post(ana, { ...base, paymentMethod: 'CREDIT' });
+      await post(bob, { ...base, paymentMethod: 'CASH', lentAt: '2026-10-01' });
+      expect((await list(ana)).body.items).toMatchObject([{ paymentMethod: 'CREDIT' }]);
+      expect((await list(bob)).body.items).toMatchObject([
+        { paymentMethod: 'CASH', lentAt: '2026-10-01' },
+      ]);
     });
   });
 });

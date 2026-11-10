@@ -5,7 +5,7 @@ import { admin, ana, bob, loansWorld } from './support';
 
 async function setup() {
   const world = await loansWorld();
-  return { ...world, create: new CreateLoan(world.loans, world.expenses, world.ids) };
+  return { ...world, create: new CreateLoan(world.loans, world.expenses, world.ids, world.clock) };
 }
 
 describe('CreateLoan', () => {
@@ -179,5 +179,93 @@ describe('CreateLoan', () => {
     } as never);
     expect((await loans.findById('bob', id))?.userId).toBe('bob');
     expect(await loans.findById('ana', id)).toBeNull();
+  });
+
+  describe('payment method and lent date', () => {
+    const direct = { borrowerName: 'Carlos', dueDate: '2026-12-10', amountCents: 15_000 };
+
+    it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)(
+      'records money lent directly with %s',
+      async (paymentMethod) => {
+        const { create, loans } = await setup();
+        const { id } = await create.execute(ana, { ...direct, paymentMethod, lentAt: '2026-11-05' });
+        const loan = await loans.findById('ana', id);
+        expect(loan?.paymentMethod).toBe(paymentMethod);
+        expect(loan?.lentAt?.toISOString()).toBe('2026-11-05T00:00:00.000Z');
+      },
+    );
+
+    it('defaults the lent date to today by the Clock', async () => {
+      const { create, loans } = await setup();
+      const { id } = await create.execute(ana, { ...direct, paymentMethod: 'PIX' });
+      expect((await loans.findById('ana', id))?.lentAt?.toISOString()).toBe(
+        '2026-11-08T00:00:00.000Z',
+      );
+    });
+
+    it('accepts a lent date up to tomorrow and in the past, down to 2000-01-01', async () => {
+      const { create } = await setup();
+      for (const lentAt of ['2026-11-09', '2000-01-01']) {
+        await expect(
+          create.execute(ana, { ...direct, paymentMethod: 'PIX', lentAt }),
+        ).resolves.toBeDefined();
+      }
+    });
+
+    it.each(['2026-11-10', '1999-12-31', '2026-02-30', '2026-11-05T00:00:00Z', '', 5 as never])(
+      'rejects the lent date %j',
+      async (lentAt) => {
+        const { create, loans } = await setup();
+        await expect(
+          create.execute(ana, { ...direct, paymentMethod: 'PIX', lentAt }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(loans.all()).toHaveLength(0);
+      },
+    );
+
+    it('requires a payment method for money lent directly', async () => {
+      const { create, loans } = await setup();
+      await expect(create.execute(ana, direct)).rejects.toBeInstanceOf(ValidationError);
+      expect(loans.all()).toHaveLength(0);
+    });
+
+    it.each(['BOLETO', 'pix', '', null, 7])('rejects the payment method %j', async (method) => {
+      const { create } = await setup();
+      await expect(
+        create.execute(ana, { ...direct, paymentMethod: method as never }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it('refuses a payment method or a lent date together with an expenseId', async () => {
+      const { create, loans } = await setup();
+      const fromExpense = { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: 'e-ana' };
+      await expect(
+        create.execute(ana, { ...fromExpense, paymentMethod: 'PIX' }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        create.execute(ana, { ...fromExpense, lentAt: '2026-11-05' }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(loans.all()).toHaveLength(0);
+    });
+
+    it('leaves both empty on a loan born from an expense', async () => {
+      const { create, loans } = await setup();
+      const { id } = await create.execute(ana, {
+        borrowerName: 'Carlos',
+        dueDate: '2026-12-10',
+        expenseId: 'e-ana',
+      });
+      const loan = await loans.findById('ana', id);
+      expect(loan?.paymentMethod).toBeNull();
+      expect(loan?.lentAt).toBeNull();
+    });
+
+    it('refuses to back a loan with a credit card bill payment', async () => {
+      const { create, loans } = await setup();
+      await expect(
+        create.execute(ana, { borrowerName: 'Carlos', dueDate: '2026-12-10', expenseId: 'e-bill' }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(loans.all()).toHaveLength(0);
+    });
   });
 });
