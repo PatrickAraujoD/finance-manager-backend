@@ -161,6 +161,145 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
   });
 
+  async function lend(id: string, userId: string) {
+    await prisma.client.loan.create({
+      data: {
+        id,
+        userId,
+        borrowerName: 'Devedor',
+        amountCents: BigInt(1_000_000),
+        dueDate: new Date('2027-12-31T00:00:00Z'),
+      },
+    });
+  }
+
+  async function receive(id: string, loanId: string, userId: string, cents: number, date: string) {
+    await prisma.client.loanPayment.create({
+      data: {
+        id,
+        loanId,
+        userId,
+        amountCents: BigInt(cents),
+        method: 'CASH',
+        paidAt: new Date(`${date}T00:00:00Z`),
+      },
+    });
+  }
+
+  describe('account outflow (everything but credit, bill payments included)', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 10, '2026-11-01', { method: 'PIX' });
+      await spend('ana', 'c-food', 20, '2026-11-30', { method: 'DEBIT' });
+      await spend('ana', 'c-food', 40, '2026-11-15', { method: 'CASH' });
+      await spend('ana', 'c-bus', 100, '2026-11-10', { method: 'PIX', isCardPayment: true });
+      await spend('ana', 'c-food', 1000, '2026-11-05', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 5, '2026-10-31');
+      await spend('ana', 'c-food', 7, '2026-12-01');
+      await spend('bob', 'c-food', 999, '2026-11-10');
+    });
+
+    it('sums debit, Pix, cash and the bill payment, and leaves the credit purchase out', async () => {
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(170);
+    });
+
+    it('counts the first and last day and leaves the neighbouring months out', async () => {
+      expect((await repo.accountOutflow('ana', '2026-10')).cents).toBe(5);
+      expect((await repo.accountOutflow('ana', '2026-12')).cents).toBe(7);
+    });
+
+    it('is scoped to the user and is zero for a month without spending', async () => {
+      expect((await repo.accountOutflow('bob', '2026-11')).cents).toBe(999);
+      expect((await repo.accountOutflow('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('credit purchases of the month', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 1000, '2026-11-01', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 200, '2026-11-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 50, '2026-11-15', { method: 'PIX' });
+      await spend('ana', 'c-food', 3, '2026-10-31', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 9, '2026-12-01', { method: 'CREDIT' });
+      await spend('bob', 'c-food', 999, '2026-11-10', { method: 'CREDIT' });
+    });
+
+    it('sums only credit purchases dated inside the month', async () => {
+      expect((await repo.creditSpent('ana', '2026-11')).cents).toBe(1200);
+      expect((await repo.creditSpent('ana', '2026-10')).cents).toBe(3);
+      expect((await repo.creditSpent('ana', '2026-12')).cents).toBe(9);
+    });
+
+    it('is scoped to the user and is zero without credit purchases', async () => {
+      expect((await repo.creditSpent('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.creditSpent('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('loan payments received', () => {
+    beforeEach(async () => {
+      await lend('l-ana', 'ana');
+      await lend('l-bob', 'bob');
+      await receive('p1', 'l-ana', 'ana', 100, '2026-11-01');
+      await receive('p2', 'l-ana', 'ana', 200, '2026-11-30');
+      await receive('p3', 'l-ana', 'ana', 400, '2026-10-31');
+      await receive('p4', 'l-ana', 'ana', 800, '2026-12-01');
+      await receive('p5', 'l-bob', 'bob', 999, '2026-11-10');
+    });
+
+    it('sums the payments by the day they were received, edges included', async () => {
+      expect((await repo.loanPaymentsReceived('ana', '2026-11')).cents).toBe(300);
+      expect((await repo.loanPaymentsReceived('ana', '2026-10')).cents).toBe(400);
+      expect((await repo.loanPaymentsReceived('ana', '2026-12')).cents).toBe(800);
+    });
+
+    it('is scoped to the user and is zero without payments', async () => {
+      expect((await repo.loanPaymentsReceived('bob', '2026-11')).cents).toBe(999);
+      expect((await repo.loanPaymentsReceived('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.loanPaymentsReceived('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('card charges and bill payments', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 500, '2026-09-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 300, '2026-10-31', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 1000, '2026-11-01', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 200, '2026-11-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 99, '2026-12-01', { method: 'CREDIT' });
+      await spend('ana', 'c-bus', 400, '2026-10-15', { isCardPayment: true });
+      await spend('ana', 'c-bus', 100, '2026-11-30', { isCardPayment: true });
+      await spend('ana', 'c-bus', 77, '2026-12-01', { isCardPayment: true });
+      await spend('ana', 'c-food', 50, '2026-11-15', { method: 'PIX' });
+      await spend('bob', 'c-food', 9999, '2026-11-10', { method: 'CREDIT' });
+      await spend('bob', 'c-bus', 8888, '2026-10-10', { isCardPayment: true });
+    });
+
+    it('splits credit charges into before the month and in the month, ignoring the next one', async () => {
+      const charges = await repo.cardCharges('ana', '2026-11');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([800, 1200]);
+    });
+
+    it('splits bill payments the same way, and a plain Pix expense is neither', async () => {
+      const payments = await repo.cardPayments('ana', '2026-11');
+      expect([payments.beforeMonth.cents, payments.inMonth.cents]).toEqual([400, 100]);
+    });
+
+    it('the first month of the data has nothing before it', async () => {
+      const charges = await repo.cardCharges('ana', '2026-09');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([0, 500]);
+    });
+
+    it('never mixes users and gives zeros without data', async () => {
+      const charges = await repo.cardCharges('bob', '2026-11');
+      const payments = await repo.cardPayments('bob', '2026-11');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([0, 9999]);
+      expect([payments.beforeMonth.cents, payments.inMonth.cents]).toEqual([8888, 0]);
+      const none = await repo.cardCharges('admin', '2026-11');
+      expect([none.beforeMonth.cents, none.inMonth.cents]).toEqual([0, 0]);
+    });
+  });
+
   describe('month boundaries (UTC calendar dates)', () => {
     beforeEach(async () => {
       await spend('ana', 'c-food', 1, '2026-02-28');

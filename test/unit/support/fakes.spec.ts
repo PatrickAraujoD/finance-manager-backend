@@ -1,6 +1,8 @@
 import { Email } from '../../../src/domain/email';
 import { Category } from '../../../src/domain/entities/category';
 import { Expense } from '../../../src/domain/entities/expense';
+import { Loan } from '../../../src/domain/entities/loan';
+import { LoanPayment } from '../../../src/domain/entities/loan-payment';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
 import { RefreshToken } from '../../../src/domain/entities/refresh-token';
 import { User } from '../../../src/domain/entities/user';
@@ -9,6 +11,8 @@ import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from '../../support/fakes/fake-category-repository';
 import { FakeExpenseRepository } from '../../support/fakes/fake-expense-repository';
 import { FakeFileStorage } from '../../support/fakes/fake-file-storage';
+import { FakeLoanPaymentRepository } from '../../support/fakes/fake-loan-payment-repository';
+import { FakeLoanRepository } from '../../support/fakes/fake-loan-repository';
 import { FakeIncomeRepository } from '../../support/fakes/fake-income-repository';
 import { FakePasswordHasher } from '../../support/fakes/fake-password-hasher';
 import { FakeReceiptExtractor } from '../../support/fakes/fake-receipt-extractor';
@@ -397,6 +401,79 @@ describe('FakeReportRepository', () => {
     ]);
     expect((await repo.totalSpent('u1', '2026-11')).cents).toBe(175);
     expect((await repo.totalSpent('u1', '2025-01')).cents).toBe(0);
+  });
+
+  it('aggregates the account and card figures like the SQL does, per user and month', async () => {
+    const expenses = new FakeExpenseRepository();
+    const categories = new FakeCategoryRepository(expenses);
+    const loans = new FakeLoanRepository();
+    const payments = new FakeLoanPaymentRepository(loans);
+    const spent = (
+      id: string,
+      userId: string,
+      cents: number,
+      at: string,
+      how: { paymentMethod?: 'CREDIT' | 'PIX'; isCardPayment?: boolean } = {},
+    ) =>
+      Expense.create({
+        id,
+        userId,
+        categoryId: 'c1',
+        receiptId: null,
+        amount: Money.fromCents(cents),
+        paidAlone: true,
+        paymentMethod: how.paymentMethod ?? 'PIX',
+        isCardPayment: how.isCardPayment ?? false,
+        spentAt: new Date(`${at}T00:00:00Z`),
+      });
+    for (const e of [
+      spent('a', 'u1', 10, '2026-11-01'),
+      spent('b', 'u1', 1000, '2026-11-02', { paymentMethod: 'CREDIT' }),
+      spent('c', 'u1', 100, '2026-11-30', { isCardPayment: true }),
+      spent('d', 'u1', 300, '2026-10-31', { paymentMethod: 'CREDIT' }),
+      spent('e', 'u1', 40, '2026-10-15', { isCardPayment: true }),
+      spent('f', 'u1', 7, '2026-12-01', { paymentMethod: 'CREDIT' }),
+      spent('g', 'u2', 999, '2026-11-02', { paymentMethod: 'CREDIT' }),
+    ]) {
+      await expenses.save(e);
+    }
+    await loans.save(
+      Loan.create({
+        id: 'l1',
+        userId: 'u1',
+        borrowerName: 'Zé',
+        amount: Money.fromCents(10000),
+        dueDate: new Date('2027-01-01T00:00:00Z'),
+        expenseId: null,
+      }),
+    );
+    for (const [id, cents, at] of [
+      ['p1', 25, '2026-11-30'],
+      ['p2', 50, '2026-12-01'],
+    ] as const) {
+      await payments.add(
+        LoanPayment.create({
+          id,
+          loanId: 'l1',
+          userId: 'u1',
+          amount: Money.fromCents(cents),
+          method: 'CASH',
+          receiptId: null,
+          paidAt: new Date(`${at}T00:00:00Z`),
+        }),
+      );
+    }
+    const repo = new FakeReportRepository(expenses, categories, payments);
+
+    expect((await repo.accountOutflow('u1', '2026-11')).cents).toBe(110);
+    expect((await repo.creditSpent('u1', '2026-11')).cents).toBe(1000);
+    expect((await repo.loanPaymentsReceived('u1', '2026-11')).cents).toBe(25);
+    const charges = await repo.cardCharges('u1', '2026-11');
+    expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([300, 1000]);
+    const paid = await repo.cardPayments('u1', '2026-11');
+    expect([paid.beforeMonth.cents, paid.inMonth.cents]).toEqual([40, 100]);
+    expect((await repo.accountOutflow('u2', '2026-11')).cents).toBe(0);
+    expect((await repo.loanPaymentsReceived('u2', '2026-11')).cents).toBe(0);
   });
 });
 
