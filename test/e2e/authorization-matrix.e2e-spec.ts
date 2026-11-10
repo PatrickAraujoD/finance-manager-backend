@@ -98,7 +98,7 @@ describe('authorization matrix', () => {
       })
     ).body.id;
     const bLoan = (
-      await post('/loans', bia, { borrowerName: 'Devedor da Bia', dueDate: '2026-12-10', amountCents: 7700, paymentMethod: 'PIX' })
+      await post('/loans', bia, { borrowerName: 'Devedor da Bia', dueDate: '2026-12-10', amountCents: 7700, paymentMethod: 'PIX', lentAt: '2026-11-03' })
     ).body.id;
     const bReceipt = randomUUID();
     await t.prisma.client.receipt.create({
@@ -498,7 +498,8 @@ describe('authorization matrix', () => {
       const loanSummary = await http().get('/loans/summary').set(...bearer(w.bia));
       expect(loanSummary.body.totals.totalLentCents).toBe(7700);
       const rep = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(w.bia));
-      expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 4200 });
+      // The Pix expense (4200) plus the Pix loan (7700) lent in the month leave the account.
+      expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 11_900 });
       // Bia's card figures come from a credit purchase made here, so the zeros above are not vacuous.
       const credit = await post('/expenses', w.bia, {
         categoryId: w.bCategory,
