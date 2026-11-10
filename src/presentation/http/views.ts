@@ -52,6 +52,7 @@ export interface ExpenseView {
   amountCents: number;
   paidAlone: boolean;
   paymentMethod: PaymentMethod;
+  isCardPayment: boolean;
   /** Calendar date, `YYYY-MM-DD`. */
   spentAt: string;
   description: string | null;
@@ -67,6 +68,7 @@ export function toExpenseView(expense: Expense): ExpenseView {
     amountCents: expense.amount.cents,
     paidAlone: expense.paidAlone,
     paymentMethod: expense.paymentMethod,
+    isCardPayment: expense.isCardPayment,
     spentAt: formatCalendarDate(expense.spentAt),
     description: expense.description ?? null,
     createdAt: expense.createdAt,

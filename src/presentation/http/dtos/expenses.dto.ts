@@ -48,6 +48,11 @@ export class CreateExpenseDto {
   @IsIn(PAYMENT_METHODS)
   paymentMethod!: PaymentMethod;
 
+  /** Optional: true when this expense pays the credit card bill; absent means false. */
+  @ValidateIf(present)
+  @IsBoolean()
+  isCardPayment?: boolean;
+
   /** `YYYY-MM-DD`; the use case checks that it is a real date and not too far ahead. */
   @IsString()
   @Matches(DATE_SHAPE)
@@ -90,11 +95,23 @@ export class UpdateExpenseDto {
   @ValidateIf(present)
   @IsIn(PAYMENT_METHODS)
   paymentMethod?: PaymentMethod;
+
+  @ValidateIf(present)
+  @IsBoolean()
+  isCardPayment?: boolean;
 }
 
 /** Query strings arrive as text: only plain digit strings become numbers, the rest fails IsInt. */
 const digits = Transform(({ value }: { value: unknown }) =>
   typeof value === 'string' && /^\d{1,9}$/.test(value) ? Number(value) : value,
+);
+
+/**
+ * Only the exact texts 'true' and 'false' become booleans; anything else (including a repeated
+ * parameter, which arrives as an array) is left as is and fails IsBoolean with a 400.
+ */
+const exactBoolean = Transform(({ value }: { value: unknown }) =>
+  value === 'true' ? true : value === 'false' ? false : value,
 );
 
 export class ListExpensesQueryDto {
@@ -115,6 +132,11 @@ export class ListExpensesQueryDto {
   @ValidateIf(present)
   @IsIn(PAYMENT_METHODS)
   paymentMethod?: PaymentMethod;
+
+  @ValidateIf(present)
+  @exactBoolean
+  @IsBoolean()
+  isCardPayment?: boolean;
 
   @ValidateIf(present)
   @digits
