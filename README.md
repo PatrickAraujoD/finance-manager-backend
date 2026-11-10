@@ -259,9 +259,12 @@ Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um com
   - `amountCents` (inteiro de 1 a 1000000000): **sempre o valor que o usuario confirmou ou
     digitou**, mesmo quando ha comprovante e mesmo no gasto dividido (`paidAlone=false`);
   - `paidAlone` (booleano): se pagou sozinho ou dividiu;
-  - `paymentMethod` (obrigatorio): forma de pagamento, exatamente `CREDIT`, `DEBIT` ou `PIX`
-    (maiusculas; qualquer outro valor responde `400`). **Mudanca incompativel:** clientes
+  - `paymentMethod` (obrigatorio): forma de pagamento, exatamente `CREDIT`, `DEBIT`, `PIX` ou `CASH`
+    (dinheiro fisico; maiusculas; qualquer outro valor responde `400`). **Mudanca incompativel:** clientes
     antigos que nao enviam `paymentMethod` em `POST /expenses` passam a receber `400`;
+  - `isCardPayment` (opcional, booleano estrito; ausente vale `false`): `true` marca o gasto como
+    **pagamento da fatura do cartao de credito**. Nao se paga o cartao com o cartao: `true`
+    junto com `paymentMethod` `CREDIT` responde `400`. A regra vale no dominio, nao no banco;
   - `spentAt` (`YYYY-MM-DD`, data real do calendario, no maximo hoje + 1 dia em UTC);
   - `receiptId` (opcional, UUID de comprovante proprio; sem ele e um lancamento manual);
   - `description` (opcional, ate 500 caracteres).
@@ -272,16 +275,19 @@ Um gasto tem categoria, valor, data, forma de pagamento e, opcionalmente, um com
 
 **`GET /expenses`**. Lista os gastos do usuario, do mais recente para o mais antigo.
 - Query (todas opcionais): `from` e `to` (`YYYY-MM-DD`, inclusivos, `from <= to`), `categoryId`
-  (UUID), `paymentMethod` (`CREDIT`, `DEBIT` ou `PIX`; valor invalido responde `400`), `limit`
-  (1 a 200, padrao 100), `offset` (0 a 100000).
+  (UUID), `paymentMethod` (`CREDIT`, `DEBIT`, `PIX` ou `CASH`; valor invalido responde `400`),
+  `isCardPayment` (`true` ou `false`, so esses textos exatos; outro valor ou parametro repetido
+  responde `400`), `limit` (1 a 200, padrao 100), `offset` (0 a 100000).
 - Resposta: `200 {"items": [...], "total": 42, "limit": 100, "offset": 0}`.
 
 **`GET /expenses/:id`**. Devolve um gasto.
-- Resposta: `200 {"id","categoryId","receiptId","amountCents","paidAlone","paymentMethod","spentAt","description","createdAt"}`.
+- Resposta: `200 {"id","categoryId","receiptId","amountCents","paidAlone","paymentMethod","isCardPayment","spentAt","description","createdAt"}`.
 
 **`PATCH /expenses/:id`**. Corrige um gasto (parcial).
-- Corpo: ao menos um entre `categoryId`, `amountCents`, `spentAt`, `description`, `paidAlone`, `paymentMethod`.
-  `receiptId` nao pode mudar (400).
+- Corpo: ao menos um entre `categoryId`, `amountCents`, `spentAt`, `description`, `paidAlone`, `paymentMethod`, `isCardPayment`.
+  A regra do cartao vale para o resultado: mudar so o `paymentMethod` para `CREDIT` de um
+  pagamento de fatura, ou marcar `isCardPayment` num gasto `CREDIT`, responde `400`; mude os dois
+  juntos para trocar de tipo. `receiptId` nao pode mudar (400).
 - Resposta: `200` com o gasto atualizado.
 
 **`DELETE /expenses/:id`**. Exclui um gasto.
@@ -389,6 +395,12 @@ Quatro rotas `GET` que alimentam os graficos. Todas olham **so os gastos do prop
 somam no banco. Parametro ausente, repetido, desconhecido ou fora do formato responde `400`.
 Valores em centavos, inteiros.
 
+`by-category`, `by-day` e `monthly-evolution` **ignoram os gastos marcados como pagamento de
+fatura** (`isCardPayment=true`): a compra no credito ja entra neles quando e feita, e contar
+tambem o pagamento da fatura seria contar o mesmo dinheiro duas vezes. Compras `CREDIT`
+continuam contando. `income-vs-spent` ainda soma todos os gastos do mes, inclusive os pagamentos
+de fatura.
+
 **`GET /reports/by-category?month=2026-11`**: "para onde vai o dinheiro". Total por categoria no
 mes, da maior para a menor. `percentage` tem 2 casas e a soma e exatamente 100. Mes sem gastos:
 `items: []` e `totalCents: 0`.
@@ -426,8 +438,9 @@ negativo e `percentSpent` pode passar de 100.
  "percentSpent":25}
 ```
 
-Os quatro relatorios fecham o mesmo total para o mesmo mes (soma dos dias = soma das categorias =
-`spentCents`).
+Os tres relatorios de graficos (`by-category`, `by-day` e `monthly-evolution`) fecham o mesmo
+total para o mesmo mes (soma dos dias = soma das categorias = valor do mes na evolucao). O
+`spentCents` deste relatorio so coincide com eles enquanto nao houver pagamento de fatura no mes.
 
 ### Limites de requisicao
 
