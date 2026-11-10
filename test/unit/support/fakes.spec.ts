@@ -383,7 +383,11 @@ describe('FakeReportRepository', () => {
     ]) {
       await expenses.save(e);
     }
-    const repo = new FakeReportRepository(expenses, categories);
+    const repo = new FakeReportRepository(
+      expenses,
+      categories,
+      new FakeLoanPaymentRepository(new FakeLoanRepository()),
+    );
     const byCat = await repo.totalsByCategory('u1', '2026-11');
     expect(byCat.map((r) => [r.categoryName, r.total.cents])).toEqual([
       ['Food', 150],

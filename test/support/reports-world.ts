@@ -1,5 +1,7 @@
 import { Category } from '../../src/domain/entities/category';
-import { Expense } from '../../src/domain/entities/expense';
+import { Expense, MAX_EXPENSE_CENTS } from '../../src/domain/entities/expense';
+import { Loan } from '../../src/domain/entities/loan';
+import { LoanPayment } from '../../src/domain/entities/loan-payment';
 import { MonthlyIncome } from '../../src/domain/entities/monthly-income';
 import { Money } from '../../src/domain/money';
 import { PaymentMethod } from '../../src/domain/payment-method';
@@ -7,6 +9,8 @@ import { Role } from '../../src/domain/role';
 import { FakeCategoryRepository } from './fakes/fake-category-repository';
 import { FakeExpenseRepository } from './fakes/fake-expense-repository';
 import { FakeIncomeRepository } from './fakes/fake-income-repository';
+import { FakeLoanPaymentRepository } from './fakes/fake-loan-payment-repository';
+import { FakeLoanRepository } from './fakes/fake-loan-repository';
 import { FakeReportRepository } from './fakes/fake-report-repository';
 
 export const ana = { id: 'ana', role: 'N' as Role };
@@ -18,7 +22,10 @@ export function reportsWorld() {
   const expenses = new FakeExpenseRepository();
   const categories = new FakeCategoryRepository(expenses);
   const incomes = new FakeIncomeRepository();
-  const reports = new FakeReportRepository(expenses, categories);
+  const loans = new FakeLoanRepository();
+  const loanPayments = new FakeLoanPaymentRepository(loans);
+  const reports = new FakeReportRepository(expenses, categories, loanPayments);
+  const lenders = new Set<string>();
   let counter = 0;
 
   return {
@@ -26,6 +33,8 @@ export function reportsWorld() {
     categories,
     incomes,
     reports,
+    loans,
+    loanPayments,
     async category(id: string, name: string, ownerId: string | null = null): Promise<void> {
       await categories.save(Category.create({ id, name, ownerId }));
     },
@@ -47,6 +56,34 @@ export function reportsWorld() {
           paymentMethod: how.paymentMethod ?? 'PIX',
           isCardPayment: how.isCardPayment ?? false,
           spentAt: new Date(`${date}T00:00:00Z`),
+        }),
+      );
+    },
+    /** A CASH payment received on a (lazily created, never exhausted) loan of the user. */
+    async receive(userId: string, cents: number, date: string): Promise<void> {
+      const loanId = `loan-${userId}`;
+      if (!lenders.has(userId)) {
+        lenders.add(userId);
+        await loans.save(
+          Loan.create({
+            id: loanId,
+            userId,
+            borrowerName: 'Borrower',
+            amount: Money.fromCents(MAX_EXPENSE_CENTS),
+            dueDate: new Date('2099-01-01T00:00:00Z'),
+            expenseId: null,
+          }),
+        );
+      }
+      await loanPayments.add(
+        LoanPayment.create({
+          id: `p${++counter}`,
+          loanId,
+          userId,
+          amount: Money.fromCents(cents),
+          method: 'CASH',
+          receiptId: null,
+          paidAt: new Date(`${date}T00:00:00Z`),
         }),
       );
     },

@@ -4,6 +4,7 @@ import {
   DayTotal,
   MonthTotal,
   ReportRepository,
+  SplitTotal,
 } from '../../application/ports/report-repository';
 import { Money } from '../../domain/money';
 import { PrismaService } from './prisma.service';
@@ -22,12 +23,14 @@ function monthWindow(fromMonth: string, toMonth: string): { start: string; end: 
   return { start: `${fromMonth}-01`, end };
 }
 
+// Never round or wrap: an unsafe sum is an error, not a wrong number on a chart.
+function toMoney(total: bigint, what: string): Money {
+  if (total > MAX_SAFE) throw new Error(`Sum of ${what} is not a safe integer amount of cents`);
+  return Money.fromCents(Number(total));
+}
+
 function sum(rows: { total: bigint }[], what: string): Money[] {
-  return rows.map((r) => {
-    // Never round or wrap: an unsafe sum is an error, not a wrong number on a chart.
-    if (r.total > MAX_SAFE) throw new Error(`Sum of ${what} is not a safe integer amount of cents`);
-    return Money.fromCents(Number(r.total));
-  });
+  return rows.map((r) => toMoney(r.total, what));
 }
 
 // Every query filters by "userId" first and then by the half-open date range, so it uses the
@@ -79,6 +82,55 @@ export function totalSpentSql(userId: string, month: string): Prisma.Sql {
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date`;
 }
 
+// Balance aggregates: one query each, never joined to categories. A credit purchase is an expense
+// whose "paymentMethod" is CREDIT; a card bill payment is one flagged "isCardPayment" (and, by
+// the domain rule, never paid with CREDIT).
+
+export function accountOutflowSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(e."amountCents"), 0)::bigint AS "total"
+    FROM "Expense" e
+    WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
+      AND e."paymentMethod" <> 'CREDIT'`;
+}
+
+export function creditSpentSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(e."amountCents"), 0)::bigint AS "total"
+    FROM "Expense" e
+    WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
+      AND e."paymentMethod" = 'CREDIT'`;
+}
+
+export function loanPaymentsReceivedSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(p."amountCents"), 0)::bigint AS "total"
+    FROM "LoanPayment" p
+    WHERE p."userId" = ${userId} AND p."paidAt" >= ${start}::date AND p."paidAt" < ${end}::date`;
+}
+
+// Everything up to the end of the month in one pass, split by FILTER at the month start.
+export function cardChargesSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(e."amountCents") FILTER (WHERE e."spentAt" < ${start}::date), 0)::bigint AS "beforeMonth",
+           COALESCE(SUM(e."amountCents") FILTER (WHERE e."spentAt" >= ${start}::date), 0)::bigint AS "inMonth"
+    FROM "Expense" e
+    WHERE e."userId" = ${userId} AND e."spentAt" < ${end}::date AND e."paymentMethod" = 'CREDIT'`;
+}
+
+export function cardPaymentsSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(e."amountCents") FILTER (WHERE e."spentAt" < ${start}::date), 0)::bigint AS "beforeMonth",
+           COALESCE(SUM(e."amountCents") FILTER (WHERE e."spentAt" >= ${start}::date), 0)::bigint AS "inMonth"
+    FROM "Expense" e
+    WHERE e."userId" = ${userId} AND e."spentAt" < ${end}::date AND e."isCardPayment"`;
+}
+
 export class PrismaReportRepository implements ReportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -115,5 +167,37 @@ export class PrismaReportRepository implements ReportRepository {
       totalSpentSql(userId, month),
     );
     return sum(rows, 'the month')[0];
+  }
+
+  private async single(query: Prisma.Sql, what: string): Promise<Money> {
+    const rows = await this.prisma.client.$queryRaw<{ total: bigint }[]>(query);
+    return sum(rows, what)[0];
+  }
+
+  private async split(query: Prisma.Sql, what: string): Promise<SplitTotal> {
+    const [row] = await this.prisma.client.$queryRaw<{ beforeMonth: bigint; inMonth: bigint }[]>(
+      query,
+    );
+    return { beforeMonth: toMoney(row.beforeMonth, what), inMonth: toMoney(row.inMonth, what) };
+  }
+
+  accountOutflow(userId: string, month: string): Promise<Money> {
+    return this.single(accountOutflowSql(userId, month), 'the account outflow');
+  }
+
+  creditSpent(userId: string, month: string): Promise<Money> {
+    return this.single(creditSpentSql(userId, month), 'the credit purchases');
+  }
+
+  loanPaymentsReceived(userId: string, month: string): Promise<Money> {
+    return this.single(loanPaymentsReceivedSql(userId, month), 'the loan payments');
+  }
+
+  cardCharges(userId: string, month: string): Promise<SplitTotal> {
+    return this.split(cardChargesSql(userId, month), 'the card charges');
+  }
+
+  cardPayments(userId: string, month: string): Promise<SplitTotal> {
+    return this.split(cardPaymentsSql(userId, month), 'the card payments');
   }
 }
