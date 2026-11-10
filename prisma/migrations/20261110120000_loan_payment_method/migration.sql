@@ -9,3 +9,11 @@ ALTER TABLE "Loan" ADD COLUMN "lentAt" DATE;
 UPDATE "Loan"
 SET "paymentMethod" = 'PIX', "lentAt" = "createdAt"::date
 WHERE "expenseId" IS NULL;
+
+-- A direct loan (no expense) always says how and when the money left; a loan born from an expense
+-- never does (it inherits both from the expense). Guards the data against writers that bypass the
+-- domain.
+ALTER TABLE "Loan" ADD CONSTRAINT "Loan_lending_fields_check" CHECK (
+  ("expenseId" IS NULL AND "paymentMethod" IS NOT NULL AND "lentAt" IS NOT NULL)
+  OR ("expenseId" IS NOT NULL AND "paymentMethod" IS NULL AND "lentAt" IS NULL)
+);

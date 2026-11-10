@@ -74,6 +74,8 @@ describe('PrismaLoanRepository (Postgres specifics)', () => {
           borrowerName: 'Carlos',
           amountCents: cents,
           dueDate: new Date('2026-12-10T00:00:00Z'),
+          paymentMethod: 'PIX',
+          lentAt: new Date('2026-11-08T00:00:00Z'),
         },
       });
     await expect(insert(0n)).rejects.toThrow();
