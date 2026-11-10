@@ -274,6 +274,34 @@ describe('CreateExpense', () => {
     expect(expenses.all()).toHaveLength(0);
   });
 
+  it('is not a card payment when isCardPayment is left out', async () => {
+    const { create, get } = await setup();
+    const { id } = await create.execute(ana, valid);
+    expect((await get.execute(ana, id)).isCardPayment).toBe(false);
+  });
+
+  it.each(['PIX', 'DEBIT', 'CASH'] as const)('stores a card bill payment made with %s', async (paymentMethod) => {
+    const { create, get } = await setup();
+    const { id } = await create.execute(ana, { ...valid, paymentMethod, isCardPayment: true });
+    expect((await get.execute(ana, id)).isCardPayment).toBe(true);
+  });
+
+  it('rejects a card bill payment made on credit (400) and saves nothing', async () => {
+    const { create, expenses } = await setup();
+    await expect(
+      create.execute(ana, { ...valid, paymentMethod: 'CREDIT', isCardPayment: true }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(expenses.all()).toHaveLength(0);
+  });
+
+  it.each([null, 'true', 1, 0, [], {}])('rejects the non boolean isCardPayment %p', async (v) => {
+    const { create, expenses } = await setup();
+    await expect(
+      create.execute(ana, { ...valid, isCardPayment: v as unknown as boolean }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(expenses.all()).toHaveLength(0);
+  });
+
   it('rejects a non boolean paidAlone', async () => {
     const { create } = await setup();
     await expect(
@@ -343,6 +371,70 @@ describe('GetExpense / UpdateExpense / DeleteExpense ownership', () => {
         update.execute(ana, id, { paymentMethod: paymentMethod as unknown as 'PIX' }),
       ).rejects.toBeInstanceOf(ValidationError);
     }
+  });
+
+  describe('isCardPayment', () => {
+    it('turns a PIX expense into a card bill payment and back, keeping the other fields', async () => {
+      const { update, get, id } = await withExpense();
+      const paid = await update.execute(ana, id, { isCardPayment: true });
+      expect(paid.isCardPayment).toBe(true);
+      expect(paid.paymentMethod).toBe('PIX');
+      expect(paid.amount.cents).toBe(2550);
+      expect((await get.execute(ana, id)).isCardPayment).toBe(true);
+      expect((await update.execute(ana, id, { isCardPayment: false })).isCardPayment).toBe(false);
+    });
+
+    it('counts as a field: it alone satisfies the at least one field rule', async () => {
+      const { update, id } = await withExpense();
+      await expect(update.execute(ana, id, { isCardPayment: false })).resolves.toBeDefined();
+    });
+
+    it('keeps the flag when other fields change', async () => {
+      const { update, id } = await withExpense();
+      await update.execute(ana, id, { isCardPayment: true });
+      expect((await update.execute(ana, id, { amountCents: 5 })).isCardPayment).toBe(true);
+    });
+
+    it('rejects flagging an expense that is on credit (400) and keeps it unchanged', async () => {
+      const { update, create, get } = await withExpense();
+      const { id } = await create.execute(ana, { ...valid, paymentMethod: 'CREDIT' });
+      await expect(update.execute(ana, id, { isCardPayment: true })).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect((await get.execute(ana, id)).isCardPayment).toBe(false);
+    });
+
+    it('rejects moving a card bill payment to credit (400) and keeps it unchanged', async () => {
+      const { update, create, get } = await withExpense();
+      const { id } = await create.execute(ana, { ...valid, isCardPayment: true });
+      await expect(update.execute(ana, id, { paymentMethod: 'CREDIT' })).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+      expect((await get.execute(ana, id)).paymentMethod).toBe('PIX');
+    });
+
+    it('accepts moving to credit together with clearing the flag, and the reverse', async () => {
+      const { update, create } = await withExpense();
+      const { id } = await create.execute(ana, { ...valid, isCardPayment: true });
+      const credit = await update.execute(ana, id, { paymentMethod: 'CREDIT', isCardPayment: false });
+      expect([credit.paymentMethod, credit.isCardPayment]).toEqual(['CREDIT', false]);
+      const bill = await update.execute(ana, id, { paymentMethod: 'DEBIT', isCardPayment: true });
+      expect([bill.paymentMethod, bill.isCardPayment]).toEqual(['DEBIT', true]);
+    });
+
+    it('rejects flagging together with credit in the same request', async () => {
+      const { update, id } = await withExpense();
+      await expect(
+        update.execute(ana, id, { paymentMethod: 'CREDIT', isCardPayment: true }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+
+    it.each([null, 'true', 1, 0])('rejects the non boolean value %p', async (v) => {
+      const { update, id } = await withExpense();
+      await expect(
+        update.execute(ana, id, { isCardPayment: v as unknown as boolean }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
   });
 
   it('needs at least one field', async () => {
@@ -446,6 +538,24 @@ describe('ListExpenses', () => {
     expect(page.total).toBe(1);
     expect((await list.execute(ana, { paymentMethod: 'PIX' })).total).toBe(4);
     expect((await list.execute(ana, { paymentMethod: 'CREDIT' })).total).toBe(0);
+  });
+
+  it('filters card bill payments in and out', async () => {
+    const { list, create } = await seeded();
+    const { id } = await create.execute(ana, { ...valid, isCardPayment: true });
+    const only = await list.execute(ana, { isCardPayment: true });
+    expect(only.items.map((e) => e.id)).toEqual([id]);
+    expect(only.total).toBe(1);
+    expect((await list.execute(ana, { isCardPayment: false })).total).toBe(4);
+    expect((await list.execute(ana, {})).total).toBe(5);
+    expect((await list.execute(bob, { isCardPayment: true })).total).toBe(0);
+  });
+
+  it.each(['true', 'false', 1, null, []])('rejects the non boolean isCardPayment filter %p', async (v) => {
+    const { list } = await seeded();
+    await expect(
+      list.execute(ana, { isCardPayment: v as unknown as boolean }),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('rejects an invalid payment method filter', async () => {

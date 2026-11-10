@@ -17,6 +17,7 @@ const expenseProps = {
   amount: Money.fromCents(1050),
   paidAlone: true,
   paymentMethod: 'PIX' as const,
+  isCardPayment: false,
   spentAt: new Date('2026-11-01T12:00:00Z'),
 };
 
@@ -37,6 +38,33 @@ describe('Expense', () => {
 
   it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)('keeps the payment method %s', (paymentMethod) => {
     expect(Expense.create({ ...expenseProps, paymentMethod }).paymentMethod).toBe(paymentMethod);
+  });
+
+  describe('isCardPayment', () => {
+    it.each(['PIX', 'DEBIT', 'CASH'] as const)('accepts a card bill payment made with %s', (paymentMethod) => {
+      const e = Expense.create({ ...expenseProps, paymentMethod, isCardPayment: true });
+      expect(e.isCardPayment).toBe(true);
+    });
+
+    it('keeps false for a purchase, including one on credit', () => {
+      expect(Expense.create({ ...expenseProps, isCardPayment: false }).isCardPayment).toBe(false);
+      expect(
+        Expense.create({ ...expenseProps, paymentMethod: 'CREDIT', isCardPayment: false })
+          .isCardPayment,
+      ).toBe(false);
+    });
+
+    it('rejects paying the card with the card (CREDIT)', () => {
+      expect(() =>
+        Expense.create({ ...expenseProps, paymentMethod: 'CREDIT', isCardPayment: true }),
+      ).toThrow(ValidationError);
+    });
+
+    it.each([undefined, null, 'true', 1])('rejects the non boolean value %p', (v) => {
+      expect(() => Expense.create({ ...expenseProps, isCardPayment: v as never })).toThrow(
+        ValidationError,
+      );
+    });
   });
 
   it.each(['', 'CHEQUE', 'cash', 'pix', undefined, null])('rejects the payment method %p', (v) => {

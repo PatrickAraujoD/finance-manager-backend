@@ -19,6 +19,7 @@ function expense(
     cents: number;
     paidAlone: boolean;
     paymentMethod: PaymentMethod;
+    isCardPayment: boolean;
     spentAt: string;
     description: string;
   }> = {},
@@ -31,6 +32,7 @@ function expense(
     amount: Money.fromCents(over.cents ?? 1050),
     paidAlone: over.paidAlone ?? true,
     paymentMethod: over.paymentMethod ?? 'PIX',
+    isCardPayment: over.isCardPayment ?? false,
     spentAt: day(over.spentAt ?? '2026-11-01'),
     description: over.description,
   });
@@ -97,6 +99,25 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     await expect(insert('no-method', '', '')).rejects.toThrow();
     await expect(insert('cheque', ',"paymentMethod"', ",'CHEQUE'")).rejects.toThrow();
     await expect(insert('ok', ',"paymentMethod"', ",'DEBIT'")).resolves.toBe(1);
+  });
+
+  it.each([true, false])('persists isCardPayment=%s', async (flag) => {
+    await repo.save(expense('e1', { isCardPayment: flag }));
+    expect((await repo.findById('u1', 'e1'))?.isCardPayment).toBe(flag);
+    const rows = await prisma.client.$queryRaw<{ f: boolean }[]>`
+      SELECT "isCardPayment" AS f FROM "Expense" WHERE id = 'e1'`;
+    expect(rows[0].f).toBe(flag);
+  });
+
+  it('defaults isCardPayment to false in the database and refuses NULL', async () => {
+    const insert = (id: string, extra: string) =>
+      prisma.client.$executeRawUnsafe(
+        `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod"${extra ? ',"isCardPayment"' : ''},"spentAt")
+         VALUES ('${id}','u1','c1',100,true,'PIX'${extra ? `,${extra}` : ''},'2026-11-01')`,
+      );
+    await insert('implicit', '');
+    expect((await repo.findById('u1', 'implicit'))?.isCardPayment).toBe(false);
+    await expect(insert('nulled', 'NULL')).rejects.toThrow();
   });
 
   it('fills createdAt on read and keeps it through an update', async () => {
@@ -198,6 +219,7 @@ describe('PrismaExpenseRepository (Postgres)', () => {
         amount: Money.fromCents(777),
         paidAlone: false,
         paymentMethod: 'DEBIT',
+        isCardPayment: false,
         spentAt: day('2026-10-10'),
       });
       expect(await repo.update(changed)).toBe(false);
@@ -209,6 +231,7 @@ describe('PrismaExpenseRepository (Postgres)', () => {
         amount: Money.fromCents(777),
         paidAlone: false,
         paymentMethod: 'DEBIT',
+        isCardPayment: true,
         spentAt: day('2026-10-10'),
       });
       expect(await repo.update(own)).toBe(true);
@@ -217,6 +240,7 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       expect(stored?.paymentMethod).toBe('DEBIT');
       expect(stored?.amount.cents).toBe(777);
       expect(stored?.paidAlone).toBe(false);
+      expect(stored?.isCardPayment).toBe(true);
       expect(stored?.spentAt.toISOString()).toBe('2026-10-10T00:00:00.000Z');
       expect(stored?.description).toBeUndefined();
       expect(stored?.receiptId).toBe('r1');
@@ -318,6 +342,20 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       // The six listing fixtures default to PIX.
       expect(await repo.countByUser('u1', { paymentMethod: 'PIX' })).toBe(5);
       expect(await repo.countByUser('u2', { paymentMethod: 'CREDIT' })).toBe(1);
+    });
+
+    it('filters card bill payments in and out, alone and combined', async () => {
+      await repo.save(expense('f1', { isCardPayment: true, spentAt: '2026-11-03' }));
+      await repo.save(expense('f2', { isCardPayment: true, spentAt: '2026-10-03', paymentMethod: 'CASH' }));
+      await repo.save(expense('f3', { userId: 'u2', isCardPayment: true }));
+      expect(ids(await repo.listByUser('u1', { isCardPayment: true }))).toEqual(['f1', 'f2']);
+      expect(await repo.countByUser('u1', { isCardPayment: true })).toBe(2);
+      expect(await repo.countByUser('u1', { isCardPayment: false })).toBe(5);
+      expect(await repo.countByUser('u1', {})).toBe(7);
+      expect(
+        ids(await repo.listByUser('u1', { isCardPayment: true, paymentMethod: 'CASH' })),
+      ).toEqual(['f2']);
+      expect(await repo.countByUser('u2', { isCardPayment: true })).toBe(1);
     });
 
     it('pages with limit/offset in the same stable order and counts the whole set', async () => {
