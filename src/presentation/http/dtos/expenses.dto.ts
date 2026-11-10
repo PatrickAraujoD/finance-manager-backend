@@ -23,7 +23,7 @@ const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 // Loose bound in UTF-16 units; the exact 500 character rule lives in the use case.
 const DESCRIPTION_BOUND = 1000;
 // Typed against the domain union so adding a method there forces this list to follow.
-const PAYMENT_METHODS: readonly PaymentMethod[] = ['CREDIT', 'DEBIT', 'PIX'];
+const PAYMENT_METHODS: readonly PaymentMethod[] = ['CREDIT', 'DEBIT', 'PIX', 'CASH'];
 const present = (_: unknown, value: unknown) => value !== undefined;
 
 /** Body of POST /expenses. Unknown fields (userId, id, createdAt...) are rejected by the pipe. */
@@ -44,7 +44,7 @@ export class CreateExpenseDto {
   @IsBoolean()
   paidAlone!: boolean;
 
-  /** Required: CREDIT, DEBIT or PIX (exact, upper case). */
+  /** Required: CREDIT, DEBIT, PIX or CASH (exact, upper case). */
   @IsIn(PAYMENT_METHODS)
   paymentMethod!: PaymentMethod;
 

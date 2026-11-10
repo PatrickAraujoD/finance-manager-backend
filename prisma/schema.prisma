@@ -16,6 +16,7 @@ enum PaymentMethod {
   CREDIT
   DEBIT
   PIX
+  CASH
 }
 
 enum LoanPaymentMethod {

@@ -59,9 +59,9 @@ export function toPaidAlone(value: unknown): boolean {
   return value;
 }
 
-/** CREDIT, DEBIT or PIX; anything else, including a missing value, is a 400. */
+/** CREDIT, DEBIT, PIX or CASH; anything else, including a missing value, is a 400. */
 export function toPaymentMethod(value: unknown): PaymentMethod {
-  if (typeof value !== 'string') throw new ValidationError('paymentMethod must be CREDIT, DEBIT or PIX');
+  if (typeof value !== 'string') throw new ValidationError('paymentMethod must be CREDIT, DEBIT, PIX or CASH');
   return parsePaymentMethod(value);
 }
 
