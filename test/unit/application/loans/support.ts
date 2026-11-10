@@ -36,6 +36,7 @@ export async function loansWorld() {
         amount: Money.fromCents(cents),
         paidAlone: false,
         paymentMethod: 'PIX',
+        isCardPayment: false,
         spentAt: new Date('2026-11-01T00:00:00Z'),
       }),
     );

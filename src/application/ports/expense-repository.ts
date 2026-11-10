@@ -11,6 +11,7 @@ export interface ExpenseFilter {
   to?: Date;
   categoryId?: string;
   paymentMethod?: PaymentMethod;
+  isCardPayment?: boolean;
 }
 
 export interface ExpensePage {
@@ -26,7 +27,7 @@ export interface ExpenseRepository {
    */
   save(expense: Expense): Promise<void>;
   /**
-   * Updates category, amount, paidAlone, paymentMethod, spentAt and description of the expense
+   * Updates category, amount, paidAlone, paymentMethod, isCardPayment, spentAt and description of the expense
    * with this id AND this owner. `userId` and `receiptId` are never changed. Returns false when
    * there is no such row. Throws `NotFoundError` when the new category does not exist.
    */

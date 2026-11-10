@@ -26,6 +26,7 @@ function toDomain(row: ExpenseRow): Expense {
     amount: Money.fromCents(Number(row.amountCents)),
     paidAlone: row.paidAlone,
     paymentMethod: row.paymentMethod,
+    isCardPayment: row.isCardPayment,
     // DATE column: Prisma returns 00:00 UTC of the stored day.
     spentAt: row.spentAt,
     description: row.description ?? undefined,
@@ -52,6 +53,7 @@ function where(userId: string, filter: ExpenseFilter): Prisma.ExpenseWhereInput 
     ...(filter.from || filter.to ? { spentAt } : {}),
     ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
     ...(filter.paymentMethod ? { paymentMethod: filter.paymentMethod } : {}),
+    ...(filter.isCardPayment !== undefined ? { isCardPayment: filter.isCardPayment } : {}),
   };
 }
 
@@ -69,6 +71,7 @@ export class PrismaExpenseRepository implements ExpenseRepository {
           amountCents: BigInt(expense.amount.cents),
           paidAlone: expense.paidAlone,
           paymentMethod: expense.paymentMethod,
+          isCardPayment: expense.isCardPayment,
           spentAt: expense.spentAt,
           description: expense.description ?? null,
         },
@@ -98,6 +101,7 @@ export class PrismaExpenseRepository implements ExpenseRepository {
           amountCents: BigInt(expense.amount.cents),
           paidAlone: expense.paidAlone,
           paymentMethod: expense.paymentMethod,
+          isCardPayment: expense.isCardPayment,
           spentAt: expense.spentAt,
           description: expense.description ?? null,
         },

@@ -5,7 +5,7 @@ import { PaymentMethod } from '../../../domain/payment-method';
 import { Actor } from '../../actor';
 import { ExpenseFilter, ExpenseRepository } from '../../ports/expense-repository';
 import { toInt } from '../paging';
-import { toPaymentMethod } from './expense-input';
+import { toIsCardPayment, toPaymentMethod } from './expense-input';
 
 export const DEFAULT_EXPENSE_PAGE = 100;
 export const MAX_EXPENSE_PAGE = 200;
@@ -18,6 +18,7 @@ export interface ListExpensesInput {
   to?: string;
   categoryId?: string;
   paymentMethod?: PaymentMethod;
+  isCardPayment?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -48,6 +49,7 @@ export class ListExpenses {
       filter.categoryId = input.categoryId;
     }
     if (input.paymentMethod !== undefined) filter.paymentMethod = toPaymentMethod(input.paymentMethod);
+    if (input.isCardPayment !== undefined) filter.isCardPayment = toIsCardPayment(input.isCardPayment);
     const limit = toInt(input.limit, 'limit', 1, MAX_EXPENSE_PAGE, DEFAULT_EXPENSE_PAGE);
     const offset = toInt(input.offset, 'offset', 0, MAX_EXPENSE_OFFSET, 0);
     const [items, total] = await Promise.all([

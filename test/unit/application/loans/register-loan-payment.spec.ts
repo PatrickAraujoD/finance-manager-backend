@@ -165,6 +165,7 @@ describe('RegisterLoanPayment', () => {
         amount: Money.fromCents(100),
         paidAlone: true,
         paymentMethod: 'PIX',
+        isCardPayment: false,
         spentAt: new Date('2026-11-01T00:00:00Z'),
       }),
     );

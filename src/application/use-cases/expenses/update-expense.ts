@@ -9,6 +9,7 @@ import {
   requireVisibleCategory,
   toAmount,
   toDescription,
+  toIsCardPayment,
   toPaidAlone,
   toPaymentMethod,
   toSpentAt,
@@ -23,6 +24,7 @@ export interface UpdateExpenseInput {
   description?: string;
   paidAlone?: boolean;
   paymentMethod?: PaymentMethod;
+  isCardPayment?: boolean;
 }
 
 export class UpdateExpense {
@@ -33,8 +35,8 @@ export class UpdateExpense {
   ) {}
 
   async execute(actor: Actor, id: string, input: UpdateExpenseInput): Promise<Expense> {
-    const { categoryId, amountCents, spentAt, description, paidAlone, paymentMethod } = input;
-    const fields = [categoryId, amountCents, spentAt, description, paidAlone, paymentMethod];
+    const { categoryId, amountCents, spentAt, description, paidAlone, paymentMethod, isCardPayment } = input;
+    const fields = [categoryId, amountCents, spentAt, description, paidAlone, paymentMethod, isCardPayment];
     if (fields.every((v) => v === undefined)) {
       throw new ValidationError('At least one field is required');
     }
@@ -43,6 +45,7 @@ export class UpdateExpense {
     const text = description === undefined ? undefined : { value: toDescription(description) };
     const alone = paidAlone === undefined ? undefined : toPaidAlone(paidAlone);
     const method = paymentMethod === undefined ? undefined : toPaymentMethod(paymentMethod);
+    const cardPayment = isCardPayment === undefined ? undefined : toIsCardPayment(isCardPayment);
     const current = await findOwnExpense(this.expenses, actor, id);
     const category =
       categoryId === undefined
@@ -57,6 +60,8 @@ export class UpdateExpense {
       amount: amount ?? current.amount,
       paidAlone: alone ?? current.paidAlone,
       paymentMethod: method ?? current.paymentMethod,
+      // Expense.create checks the resulting pair, so changing only one side of it is validated too.
+      isCardPayment: cardPayment ?? current.isCardPayment,
       spentAt: date ?? current.spentAt,
       description: text ? text.value : current.description,
       createdAt: current.createdAt,

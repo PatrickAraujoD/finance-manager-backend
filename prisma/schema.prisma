@@ -84,6 +84,8 @@ model Expense {
   amountCents   BigInt
   paidAlone     Boolean
   paymentMethod PaymentMethod
+  // Pays the credit card bill; those expenses are left out of the spending reports.
+  isCardPayment Boolean       @default(false)
   // Calendar date (no time zone).
   spentAt       DateTime      @db.Date
   description   String?

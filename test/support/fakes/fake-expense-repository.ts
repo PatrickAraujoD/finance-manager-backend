@@ -32,6 +32,7 @@ export class FakeExpenseRepository implements ExpenseRepository {
         amount: expense.amount,
         paidAlone: expense.paidAlone,
         paymentMethod: expense.paymentMethod,
+        isCardPayment: expense.isCardPayment,
         spentAt: expense.spentAt,
         description: expense.description,
         createdAt: current.createdAt,
@@ -51,7 +52,8 @@ export class FakeExpenseRepository implements ExpenseRepository {
           (!filter.from || e.spentAt >= filter.from) &&
           (!filter.to || e.spentAt <= filter.to) &&
           (!filter.categoryId || e.categoryId === filter.categoryId) &&
-          (!filter.paymentMethod || e.paymentMethod === filter.paymentMethod),
+          (!filter.paymentMethod || e.paymentMethod === filter.paymentMethod) &&
+          (filter.isCardPayment === undefined || e.isCardPayment === filter.isCardPayment),
       )
       .sort((x, y) => y.spentAt.getTime() - x.spentAt.getTime() || (x.id < y.id ? 1 : -1));
   }

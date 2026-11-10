@@ -38,6 +38,7 @@ export function reportsWorld() {
           amount: Money.fromCents(cents),
           paidAlone: true,
           paymentMethod: 'PIX',
+          isCardPayment: false,
           spentAt: new Date(`${date}T00:00:00Z`),
         }),
       );

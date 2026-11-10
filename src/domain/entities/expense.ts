@@ -19,6 +19,8 @@ export interface ExpenseProps {
   amount: Money;
   paidAlone: boolean;
   paymentMethod: PaymentMethod;
+  /** True when the expense pays the credit card bill (the purchases were counted when made). */
+  isCardPayment: boolean;
   spentAt: Date;
   description?: string;
   /** Set by the database; null until the expense is persisted. */
@@ -38,6 +40,13 @@ export class Expense {
     requireNonBlank(input.categoryId, 'categoryId');
     if (input.receiptId !== null) requireNonBlank(input.receiptId, 'receiptId');
     parsePaymentMethod(input.paymentMethod);
+    if (typeof input.isCardPayment !== 'boolean') {
+      throw new ValidationError('isCardPayment must be true or false');
+    }
+    // The card is paid with money from the account, never with the card itself.
+    if (input.isCardPayment && input.paymentMethod === 'CREDIT') {
+      throw new ValidationError('A card bill payment cannot be paid with CREDIT');
+    }
     if (input.description !== undefined) requireCleanText(input.description, 'description', { kind: 'description' });
     if (input.amount.cents <= 0) throw new ValidationError('Expense amount must be positive');
     if (input.amount.cents > MAX_EXPENSE_CENTS) {
@@ -74,6 +83,9 @@ export class Expense {
   }
   get paymentMethod(): PaymentMethod {
     return this.props.paymentMethod;
+  }
+  get isCardPayment(): boolean {
+    return this.props.isCardPayment;
   }
   get spentAt(): Date {
     return new Date(this.props.spentAt.getTime());

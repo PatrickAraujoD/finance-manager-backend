@@ -59,6 +59,13 @@ export function toPaidAlone(value: unknown): boolean {
   return value;
 }
 
+/** Absent means a regular expense (false); anything but a boolean is a 400. */
+export function toIsCardPayment(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw new ValidationError('isCardPayment must be true or false');
+  return value;
+}
+
 /** CREDIT, DEBIT, PIX or CASH; anything else, including a missing value, is a 400. */
 export function toPaymentMethod(value: unknown): PaymentMethod {
   if (typeof value !== 'string') throw new ValidationError('paymentMethod must be CREDIT, DEBIT, PIX or CASH');

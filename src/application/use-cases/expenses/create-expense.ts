@@ -12,6 +12,7 @@ import {
   requireVisibleCategory,
   toAmount,
   toDescription,
+  toIsCardPayment,
   toPaidAlone,
   toPaymentMethod,
   toSpentAt,
@@ -24,6 +25,8 @@ export interface CreateExpenseInput {
   amountCents: number;
   paidAlone: boolean;
   paymentMethod: PaymentMethod;
+  /** Optional: absent means false. Paying the card bill cannot use CREDIT. */
+  isCardPayment?: boolean;
   /** `YYYY-MM-DD`, a real calendar date, at most today + 1 day (UTC). */
   spentAt: string;
   description?: string;
@@ -45,6 +48,7 @@ export class CreateExpense {
     const spentAt = toSpentAt(input.spentAt, this.clock);
     const paidAlone = toPaidAlone(input.paidAlone);
     const paymentMethod = toPaymentMethod(input.paymentMethod);
+    const isCardPayment = toIsCardPayment(input.isCardPayment);
     const description = input.description === undefined ? undefined : toDescription(input.description);
     const receiptId = input.receiptId ?? null;
     if (receiptId !== null && (typeof receiptId !== 'string' || receiptId.trim() === '')) {
@@ -68,6 +72,7 @@ export class CreateExpense {
       amount,
       paidAlone,
       paymentMethod,
+      isCardPayment,
       spentAt,
       description,
     });
