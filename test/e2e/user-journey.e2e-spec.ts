@@ -240,6 +240,8 @@ describe('complete user journey', () => {
       month: '2026-11',
       incomeCents: 500_000,
       spentCents: 32_345,
+      receivedCents: 0,
+      creditSpentCents: 0,
       remainingCents: 467_655,
       percentSpent: 6.47,
     });
