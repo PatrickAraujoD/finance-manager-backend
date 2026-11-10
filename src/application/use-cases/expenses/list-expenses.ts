@@ -1,8 +1,11 @@
 import { parseCalendarDate } from '../../../domain/calendar-date';
 import { Expense } from '../../../domain/entities/expense';
 import { ValidationError } from '../../../domain/errors';
+import { PaymentMethod } from '../../../domain/payment-method';
 import { Actor } from '../../actor';
 import { ExpenseFilter, ExpenseRepository } from '../../ports/expense-repository';
+import { toInt } from '../paging';
+import { toIsCardPayment, toPaymentMethod } from './expense-input';
 
 export const DEFAULT_EXPENSE_PAGE = 100;
 export const MAX_EXPENSE_PAGE = 200;
@@ -14,6 +17,8 @@ export interface ListExpensesInput {
   from?: string;
   to?: string;
   categoryId?: string;
+  paymentMethod?: PaymentMethod;
+  isCardPayment?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -24,14 +29,6 @@ export interface ExpensePageResult {
   total: number;
   limit: number;
   offset: number;
-}
-
-function toInt(value: unknown, field: string, min: number, max: number, fallback: number): number {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) {
-    throw new ValidationError(`${field} must be an integer between ${min} and ${max}`);
-  }
-  return value;
 }
 
 /** Lists the actor's own expenses (admins see no one else's), newest first. */
@@ -51,6 +48,8 @@ export class ListExpenses {
       }
       filter.categoryId = input.categoryId;
     }
+    if (input.paymentMethod !== undefined) filter.paymentMethod = toPaymentMethod(input.paymentMethod);
+    if (input.isCardPayment !== undefined) filter.isCardPayment = toIsCardPayment(input.isCardPayment);
     const limit = toInt(input.limit, 'limit', 1, MAX_EXPENSE_PAGE, DEFAULT_EXPENSE_PAGE);
     const offset = toInt(input.offset, 'offset', 0, MAX_EXPENSE_OFFSET, 0);
     const [items, total] = await Promise.all([

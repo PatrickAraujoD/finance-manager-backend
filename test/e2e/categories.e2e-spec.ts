@@ -165,6 +165,7 @@ describe('categories endpoints', () => {
           categoryId: id,
           amountCents: 1050n,
           paidAlone: true,
+          paymentMethod: 'PIX',
           spentAt: new Date('2026-11-01T00:00:00Z'),
         },
       });

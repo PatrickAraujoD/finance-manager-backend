@@ -85,6 +85,7 @@ describe('public route inventory', () => {
         'GET /reports/by-day',
         'GET /reports/monthly-evolution',
         'GET /reports/income-vs-spent',
+        'GET /reports/card',
       ]),
     );
   });

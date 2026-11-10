@@ -12,22 +12,36 @@ enum Role {
   N
 }
 
+enum PaymentMethod {
+  CREDIT
+  DEBIT
+  PIX
+  CASH
+}
+
+enum LoanPaymentMethod {
+  CASH
+  PIX
+}
+
 model User {
-  id            String         @id
+  id            String          @id
   name          String
-  email         String         @unique
+  email         String          @unique
   passwordHash  String
   role          Role
-  active        Boolean        @default(true)
-  failedLogins  Int            @default(0)
+  active        Boolean         @default(true)
+  failedLogins  Int             @default(0)
   lockedUntil   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   refreshTokens RefreshToken[]
   categories    Category[]
   expenses      Expense[]
   incomes       MonthlyIncome[]
   receipts      Receipt[]
+  loans         Loan[]
+  loanPayments  LoanPayment[]
 }
 
 model RefreshToken {
@@ -62,20 +76,24 @@ model Category {
 // so any number of manual expenses (receiptId NULL) is fine. CHECK amountCents > 0 lives in the
 // migration SQL.
 model Expense {
-  id          String   @id
-  userId      String
-  categoryId  String
-  receiptId   String?  @unique
+  id            String        @id
+  userId        String
+  categoryId    String
+  receiptId     String?       @unique
   // Integer cents; BigInt so any safe integer fits.
-  amountCents BigInt
-  paidAlone   Boolean
+  amountCents   BigInt
+  paidAlone     Boolean
+  paymentMethod PaymentMethod
+  // Pays the credit card bill; those expenses are left out of the spending reports.
+  isCardPayment Boolean       @default(false)
   // Calendar date (no time zone).
-  spentAt     DateTime @db.Date
-  description String?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  receipt     Receipt? @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  spentAt       DateTime      @db.Date
+  description   String?
+  createdAt     DateTime      @default(now())
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  receipt       Receipt?      @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  loan          Loan?
 
   @@index([userId, spentAt])
   @@index([categoryId])
@@ -101,16 +119,68 @@ model MonthlyIncome {
 // Restrict on both sides: a user with receipts, or a receipt used by an expense, cannot be
 // deleted silently. CHECK suggestedAmountCents > 0 lives in the migration SQL.
 model Receipt {
-  id                   String    @id
+  id                   String   @id
   userId               String
-  storageKey           String    @unique
+  storageKey           String   @unique
   mimeType             String
   sizeBytes            Int
   // Integer cents; BigInt so any safe integer fits. NULL = nothing reliable was extracted.
   suggestedAmountCents BigInt?
-  createdAt            DateTime  @default(now())
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   expense              Expense?
+  loanPayment          LoanPayment?
 
+  @@index([userId])
+}
+
+// Money lent to someone. expenseId is UNIQUE: an expense turns into at most one loan (the amount is
+// copied from it); NULL for money lent directly, and Postgres treats NULLs as distinct. Restrict
+// on both sides: a user or an expense that has a loan cannot be deleted silently. CHECKs
+// (amountCents > 0 and the amount ceiling) live in the migration SQL.
+model Loan {
+  id           String   @id
+  userId       String
+  borrowerName String
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents  BigInt
+  // Calendar date (no time zone).
+  dueDate      DateTime @db.Date
+  expenseId    String?  @unique
+  // Only for money lent directly (expenseId null): how it left and the day it left. A loan born
+  // from an expense inherits both from the expense, so both stay NULL (a CHECK in the migration).
+  paymentMethod PaymentMethod?
+  lentAt       DateTime? @db.Date
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  expense      Expense? @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  payments     LoanPayment[]
+
+  @@index([userId, dueDate])
+  @@index([userId, borrowerName])
+}
+
+// A payment toward one specific loan. receiptId is UNIQUE: one receipt backs at most one payment
+// (the code also refuses a receipt that backs an expense); NULL for cash, and Postgres treats
+// NULLs as distinct. Restrict everywhere: a loan, a user or a receipt that has payments cannot be
+// deleted silently. CHECKs (amountCents > 0, the amount ceiling, and PIX <=> receipt) live in the
+// migration SQL. The sum of a loan's payments never passing its amount is enforced in code under
+// a row lock on the loan (see PrismaLoanPaymentRepository.add).
+model LoanPayment {
+  id          String            @id
+  loanId      String
+  userId      String
+  // Integer cents; BigInt so any safe integer fits.
+  amountCents BigInt
+  method      LoanPaymentMethod
+  receiptId   String?           @unique
+  // Calendar date (no time zone).
+  paidAt      DateTime          @db.Date
+  createdAt   DateTime          @default(now())
+  loan        Loan              @relation(fields: [loanId], references: [id], onDelete: Restrict)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  receipt     Receipt?          @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+
+  @@index([loanId, paidAt])
   @@index([userId])
 }

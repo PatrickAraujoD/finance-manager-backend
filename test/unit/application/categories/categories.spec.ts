@@ -233,6 +233,8 @@ describe('DeleteCategory', () => {
         receiptId: null,
         amount: Money.fromCents(1000),
         paidAlone: true,
+        paymentMethod: 'PIX',
+        isCardPayment: false,
         spentAt: new Date('2026-11-01T00:00:00Z'),
       }),
     );

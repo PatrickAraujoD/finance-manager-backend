@@ -40,6 +40,8 @@ const expense = {
   receiptId: null,
   amount: Money.fromCents(100),
   paidAlone: true,
+  paymentMethod: 'PIX' as const,
+  isCardPayment: false,
   spentAt: new Date('2026-11-01T12:00:00Z'),
 };
 

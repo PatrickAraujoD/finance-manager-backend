@@ -25,6 +25,8 @@ function toDomain(row: ExpenseRow): Expense {
     receiptId: row.receiptId,
     amount: Money.fromCents(Number(row.amountCents)),
     paidAlone: row.paidAlone,
+    paymentMethod: row.paymentMethod,
+    isCardPayment: row.isCardPayment,
     // DATE column: Prisma returns 00:00 UTC of the stored day.
     spentAt: row.spentAt,
     description: row.description ?? undefined,
@@ -50,6 +52,8 @@ function where(userId: string, filter: ExpenseFilter): Prisma.ExpenseWhereInput 
     userId,
     ...(filter.from || filter.to ? { spentAt } : {}),
     ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
+    ...(filter.paymentMethod ? { paymentMethod: filter.paymentMethod } : {}),
+    ...(filter.isCardPayment !== undefined ? { isCardPayment: filter.isCardPayment } : {}),
   };
 }
 
@@ -66,6 +70,8 @@ export class PrismaExpenseRepository implements ExpenseRepository {
           receiptId: expense.receiptId,
           amountCents: BigInt(expense.amount.cents),
           paidAlone: expense.paidAlone,
+          paymentMethod: expense.paymentMethod,
+          isCardPayment: expense.isCardPayment,
           spentAt: expense.spentAt,
           description: expense.description ?? null,
         },
@@ -94,6 +100,8 @@ export class PrismaExpenseRepository implements ExpenseRepository {
           categoryId: expense.categoryId,
           amountCents: BigInt(expense.amount.cents),
           paidAlone: expense.paidAlone,
+          paymentMethod: expense.paymentMethod,
+          isCardPayment: expense.isCardPayment,
           spentAt: expense.spentAt,
           description: expense.description ?? null,
         },
@@ -123,8 +131,18 @@ export class PrismaExpenseRepository implements ExpenseRepository {
     return this.prisma.client.expense.count({ where: where(userId, filter) });
   }
 
+  async isReceiptUsed(receiptId: string): Promise<boolean> {
+    return (await this.prisma.client.expense.count({ where: { receiptId } })) > 0;
+  }
+
   async delete(userId: string, id: string): Promise<boolean> {
-    const result = await this.prisma.client.expense.deleteMany({ where: { id, userId } });
-    return result.count > 0;
+    try {
+      const result = await this.prisma.client.expense.deleteMany({ where: { id, userId } });
+      return result.count > 0;
+    } catch (error) {
+      // FK Restrict: a loan was created from this expense and still points at it.
+      if (errorCode(error) === 'P2003') throw new ConflictError('Expense has a loan');
+      throw error;
+    }
   }
 }

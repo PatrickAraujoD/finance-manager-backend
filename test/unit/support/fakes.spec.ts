@@ -1,6 +1,8 @@
 import { Email } from '../../../src/domain/email';
 import { Category } from '../../../src/domain/entities/category';
 import { Expense } from '../../../src/domain/entities/expense';
+import { Loan } from '../../../src/domain/entities/loan';
+import { LoanPayment } from '../../../src/domain/entities/loan-payment';
 import { MonthlyIncome } from '../../../src/domain/entities/monthly-income';
 import { RefreshToken } from '../../../src/domain/entities/refresh-token';
 import { User } from '../../../src/domain/entities/user';
@@ -9,6 +11,8 @@ import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from '../../support/fakes/fake-category-repository';
 import { FakeExpenseRepository } from '../../support/fakes/fake-expense-repository';
 import { FakeFileStorage } from '../../support/fakes/fake-file-storage';
+import { FakeLoanPaymentRepository } from '../../support/fakes/fake-loan-payment-repository';
+import { FakeLoanRepository } from '../../support/fakes/fake-loan-repository';
 import { FakeIncomeRepository } from '../../support/fakes/fake-income-repository';
 import { FakePasswordHasher } from '../../support/fakes/fake-password-hasher';
 import { FakeReceiptExtractor } from '../../support/fakes/fake-receipt-extractor';
@@ -27,6 +31,8 @@ const expense = (id: string, userId: string, categoryId: string, cents: number, 
     receiptId: null,
     amount: Money.fromCents(cents),
     paidAlone: true,
+    paymentMethod: 'PIX',
+    isCardPayment: false,
     spentAt: new Date(at),
   });
 
@@ -179,6 +185,8 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId,
       amount: Money.fromCents(100),
       paidAlone: true,
+      paymentMethod: 'PIX',
+      isCardPayment: false,
       spentAt: new Date('2026-11-01T00:00:00Z'),
     });
 
@@ -212,6 +220,8 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId: 'other',
       amount: Money.fromCents(999),
       paidAlone: false,
+      paymentMethod: 'PIX',
+      isCardPayment: false,
       spentAt: new Date('2026-10-01T00:00:00Z'),
       description: 'x',
     });
@@ -224,6 +234,8 @@ describe('FakeExpenseRepository port contract', () => {
       receiptId: 'other',
       amount: Money.fromCents(999),
       paidAlone: false,
+      paymentMethod: 'PIX',
+      isCardPayment: false,
       spentAt: new Date('2026-10-01T00:00:00Z'),
       description: 'x',
     });
@@ -371,7 +383,12 @@ describe('FakeReportRepository', () => {
     ]) {
       await expenses.save(e);
     }
-    const repo = new FakeReportRepository(expenses, categories);
+    const repo = new FakeReportRepository(
+      expenses,
+      categories,
+      new FakeLoanPaymentRepository(new FakeLoanRepository()),
+      new FakeLoanRepository(),
+    );
     const byCat = await repo.totalsByCategory('u1', '2026-11');
     expect(byCat.map((r) => [r.categoryName, r.total.cents])).toEqual([
       ['Food', 150],
@@ -387,8 +404,130 @@ describe('FakeReportRepository', () => {
       ['2026-10', 10],
       ['2026-11', 175],
     ]);
-    expect((await repo.totalSpent('u1', '2026-11')).cents).toBe(175);
-    expect((await repo.totalSpent('u1', '2025-01')).cents).toBe(0);
+    expect((await repo.accountOutflow('u1', '2026-11')).cents).toBe(175);
+    expect((await repo.accountOutflow('u1', '2025-01')).cents).toBe(0);
+  });
+
+  it('aggregates the account and card figures like the SQL does, per user and month', async () => {
+    const expenses = new FakeExpenseRepository();
+    const categories = new FakeCategoryRepository(expenses);
+    const loans = new FakeLoanRepository();
+    const payments = new FakeLoanPaymentRepository(loans);
+    const spent = (
+      id: string,
+      userId: string,
+      cents: number,
+      at: string,
+      how: { paymentMethod?: 'CREDIT' | 'PIX'; isCardPayment?: boolean } = {},
+    ) =>
+      Expense.create({
+        id,
+        userId,
+        categoryId: 'c1',
+        receiptId: null,
+        amount: Money.fromCents(cents),
+        paidAlone: true,
+        paymentMethod: how.paymentMethod ?? 'PIX',
+        isCardPayment: how.isCardPayment ?? false,
+        spentAt: new Date(`${at}T00:00:00Z`),
+      });
+    for (const e of [
+      spent('a', 'u1', 10, '2026-11-01'),
+      spent('b', 'u1', 1000, '2026-11-02', { paymentMethod: 'CREDIT' }),
+      spent('c', 'u1', 100, '2026-11-30', { isCardPayment: true }),
+      spent('d', 'u1', 300, '2026-10-31', { paymentMethod: 'CREDIT' }),
+      spent('e', 'u1', 40, '2026-10-15', { isCardPayment: true }),
+      spent('f', 'u1', 7, '2026-12-01', { paymentMethod: 'CREDIT' }),
+      spent('g', 'u2', 999, '2026-11-02', { paymentMethod: 'CREDIT' }),
+    ]) {
+      await expenses.save(e);
+    }
+    await loans.save(
+      Loan.create({
+        id: 'l1',
+        userId: 'u1',
+        borrowerName: 'Zé',
+        amount: Money.fromCents(10000),
+        dueDate: new Date('2027-01-01T00:00:00Z'),
+        expenseId: null,
+        paymentMethod: 'CASH',
+        lentAt: new Date('2000-01-01T00:00:00Z'),
+      }),
+    );
+    for (const [id, cents, at] of [
+      ['p1', 25, '2026-11-30'],
+      ['p2', 50, '2026-12-01'],
+    ] as const) {
+      await payments.add(
+        LoanPayment.create({
+          id,
+          loanId: 'l1',
+          userId: 'u1',
+          amount: Money.fromCents(cents),
+          method: 'CASH',
+          receiptId: null,
+          paidAt: new Date(`${at}T00:00:00Z`),
+        }),
+      );
+    }
+    const repo = new FakeReportRepository(expenses, categories, payments, loans);
+
+    expect((await repo.accountOutflow('u1', '2026-11')).cents).toBe(110);
+    expect((await repo.creditSpent('u1', '2026-11')).cents).toBe(1000);
+    expect((await repo.loanPaymentsReceived('u1', '2026-11')).cents).toBe(25);
+    const charges = await repo.cardCharges('u1', '2026-11');
+    expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([300, 1000]);
+    const paid = await repo.cardPayments('u1', '2026-11');
+    expect([paid.beforeMonth.cents, paid.inMonth.cents]).toEqual([40, 100]);
+    expect((await repo.accountOutflow('u2', '2026-11')).cents).toBe(0);
+    expect((await repo.loanPaymentsReceived('u2', '2026-11')).cents).toBe(0);
+  });
+
+  it('sums money lent directly by method and date, and skips loans born from expenses', async () => {
+    const expenses = new FakeExpenseRepository();
+    const loans = new FakeLoanRepository();
+    const repo = new FakeReportRepository(
+      expenses,
+      new FakeCategoryRepository(expenses),
+      new FakeLoanPaymentRepository(loans),
+      loans,
+    );
+    const lend = (id: string, userId: string, cents: number, method: 'PIX' | 'CREDIT', at: string) =>
+      loans.save(
+        Loan.create({
+          id,
+          userId,
+          borrowerName: 'Zé',
+          amount: Money.fromCents(cents),
+          dueDate: new Date('2099-01-01T00:00:00Z'),
+          expenseId: null,
+          paymentMethod: method,
+          lentAt: new Date(`${at}T00:00:00Z`),
+        }),
+      );
+    await lend('a', 'u1', 10, 'PIX', '2026-11-30');
+    await lend('b', 'u1', 20, 'PIX', '2026-12-01');
+    await lend('c', 'u1', 300, 'CREDIT', '2026-10-31');
+    await lend('d', 'u1', 4000, 'CREDIT', '2026-11-01');
+    await lend('e', 'u1', 50000, 'CREDIT', '2026-12-01');
+    await lend('f', 'u2', 999, 'PIX', '2026-11-30');
+    await loans.save(
+      Loan.create({
+        id: 'g',
+        userId: 'u1',
+        borrowerName: 'Zé',
+        amount: Money.fromCents(7),
+        dueDate: new Date('2099-01-01T00:00:00Z'),
+        expenseId: 'x1',
+        paymentMethod: null,
+        lentAt: null,
+      }),
+    );
+
+    expect((await repo.directLoansOutflow('u1', '2026-11')).cents).toBe(10);
+    const credit = await repo.directLoansOnCredit('u1', '2026-11');
+    expect([credit.beforeMonth.cents, credit.inMonth.cents]).toEqual([300, 4000]);
+    expect((await repo.directLoansOutflow('u3', '2026-11')).cents).toBe(0);
   });
 });
 
@@ -467,5 +606,28 @@ describe('FixedClock and SequentialIdGenerator', () => {
   it('ids are sequential', () => {
     const ids = new SequentialIdGenerator();
     expect([ids.next(), ids.next()]).toEqual(['id-1', 'id-2']);
+  });
+});
+
+describe('FakeExpenseRepository.isReceiptUsed', () => {
+  it('is true only while an expense backs the receipt', async () => {
+    const repo = new FakeExpenseRepository();
+    await repo.save(
+      Expense.create({
+        id: 'e1',
+        userId: 'u1',
+        categoryId: 'c1',
+        receiptId: 'r1',
+        amount: Money.fromCents(100),
+        paidAlone: true,
+        paymentMethod: 'PIX',
+        isCardPayment: false,
+        spentAt: new Date('2026-11-01T00:00:00Z'),
+      }),
+    );
+    expect(await repo.isReceiptUsed('r1')).toBe(true);
+    expect(await repo.isReceiptUsed('r2')).toBe(false);
+    await repo.delete('u1', 'e1');
+    expect(await repo.isReceiptUsed('r1')).toBe(false);
   });
 });

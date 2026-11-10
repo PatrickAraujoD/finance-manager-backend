@@ -1,4 +1,5 @@
 import { Expense } from '../../domain/entities/expense';
+import { PaymentMethod } from '../../domain/payment-method';
 
 /**
  * `spentAt` is a CALENDAR DATE stored as a `Date` at 00:00 UTC (CTO decision: avoids shifting
@@ -9,6 +10,8 @@ export interface ExpenseFilter {
   from?: Date;
   to?: Date;
   categoryId?: string;
+  paymentMethod?: PaymentMethod;
+  isCardPayment?: boolean;
 }
 
 export interface ExpensePage {
@@ -24,9 +27,9 @@ export interface ExpenseRepository {
    */
   save(expense: Expense): Promise<void>;
   /**
-   * Updates category, amount, paidAlone, spentAt and description of the expense with this id AND
-   * this owner. `userId` and `receiptId` are never changed. Returns false when there is no such
-   * row. Throws `NotFoundError` when the new category does not exist.
+   * Updates category, amount, paidAlone, paymentMethod, isCardPayment, spentAt and description of the expense
+   * with this id AND this owner. `userId` and `receiptId` are never changed. Returns false when
+   * there is no such row. Throws `NotFoundError` when the new category does not exist.
    */
   update(expense: Expense): Promise<boolean>;
   /** Only returns the expense when it belongs to `userId`. */
@@ -38,6 +41,11 @@ export interface ExpenseRepository {
   listByUser(userId: string, filter: ExpenseFilter, page?: ExpensePage): Promise<Expense[]>;
   /** Number of expenses of `userId` matching `filter` (ignores paging). */
   countByUser(userId: string, filter: ExpenseFilter): Promise<number>;
-  /** Deletes the expense only when it belongs to `userId`; false when nothing was deleted. */
+  /** True when any expense (of any user) uses this receipt. */
+  isReceiptUsed(receiptId: string): Promise<boolean>;
+  /**
+   * Deletes the expense only when it belongs to `userId`; false when nothing was deleted. Throws
+   * `ConflictError` while a loan created from the expense exists.
+   */
   delete(userId: string, id: string): Promise<boolean>;
 }

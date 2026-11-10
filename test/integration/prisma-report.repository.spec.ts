@@ -1,9 +1,12 @@
 import {
+  accountOutflowSql,
+  cardChargesSql,
+  cardPaymentsSql,
   categoryTotalsSql,
+  creditSpentSql,
   dayTotalsSql,
   monthTotalsSql,
   PrismaReportRepository,
-  totalSpentSql,
 } from '../../src/infrastructure/prisma/prisma-report.repository';
 import { ByCategory } from '../../src/application/use-cases/reports/by-category';
 import { ByDay } from '../../src/application/use-cases/reports/by-day';
@@ -46,10 +49,38 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
   });
 
-  async function spend(userId: string, categoryId: string, cents: number, date: string) {
+  async function spend(
+    userId: string,
+    categoryId: string,
+    cents: number,
+    date: string,
+    how: { method?: 'CREDIT' | 'DEBIT' | 'PIX' | 'CASH'; isCardPayment?: boolean } = {},
+  ) {
+    const id = `e${++seq}`;
     await prisma.client.$executeRaw`
-      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, ${date}::date)`;
+      INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","isCardPayment","spentAt")
+      VALUES (${id}, ${userId}, ${categoryId}, ${cents}, true, ${how.method ?? 'PIX'}::"PaymentMethod",
+        ${how.isCardPayment ?? false}, ${date}::date)`;
+    return id;
+  }
+
+  /** Money lent directly (no expense); or, with `fromExpense`, a loan born from that expense. */
+  async function lendDirect(
+    userId: string,
+    cents: number,
+    how: { method: 'CREDIT' | 'DEBIT' | 'PIX' | 'CASH'; lentAt: string } | { fromExpense: string },
+  ) {
+    const id = `l${++seq}`;
+    if ('fromExpense' in how) {
+      await prisma.client.$executeRaw`
+        INSERT INTO "Loan" ("id","userId","borrowerName","amountCents","dueDate","expenseId")
+        VALUES (${id}, ${userId}, 'Carlos', ${cents}, '2099-01-01'::date, ${how.fromExpense})`;
+      return;
+    }
+    await prisma.client.$executeRaw`
+      INSERT INTO "Loan" ("id","userId","borrowerName","amountCents","dueDate","paymentMethod","lentAt")
+      VALUES (${id}, ${userId}, 'Carlos', ${cents}, '2099-01-01'::date, ${how.method}::"PaymentMethod",
+        ${how.lentAt}::date)`;
   }
 
   const cents = (rows: { total: { cents: number } }[]) => rows.map((r) => r.total.cents);
@@ -59,7 +90,7 @@ describe('PrismaReportRepository (Postgres)', () => {
       expect(await repo.totalsByCategory('ana', '2026-11')).toEqual([]);
       expect(await repo.totalsByDay('ana', '2026-11')).toEqual([]);
       expect(await repo.totalsByMonth('ana', '2026-01', '2026-12')).toEqual([]);
-      expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(0);
     });
   });
 
@@ -99,13 +130,253 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
 
     it('the total spent equals the sum of days, of categories and of the month row', async () => {
-      const total = (await repo.totalSpent('ana', '2026-11')).cents;
+      const total = (await repo.accountOutflow('ana', '2026-11')).cents;
       expect(total).toBe(5750);
       expect(cents(await repo.totalsByDay('ana', '2026-11')).reduce((a, b) => a + b)).toBe(total);
       expect(cents(await repo.totalsByCategory('ana', '2026-11')).reduce((a, b) => a + b)).toBe(
         total,
       );
       expect((await repo.totalsByMonth('ana', '2026-11', '2026-11'))[0].total.cents).toBe(total);
+    });
+  });
+
+  describe('card bill payments', () => {
+    // A 1000 credit purchase is counted when it is made; paying the bill (Pix, 1000) must not
+    // count it again in the grouped reports.
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 1000, '2026-11-02', { method: 'CREDIT' });
+      await spend('ana', 'c-bus', 1000, '2026-11-10', { isCardPayment: true });
+      await spend('ana', 'c-bus', 300, '2026-11-11', { method: 'CASH' });
+      await spend('ana', 'c-food', 1000, '2026-10-10', { isCardPayment: true });
+      await spend('bob', 'c-food', 1000, '2026-11-10', { isCardPayment: true });
+    });
+
+    it('by category counts the credit purchase and ignores the bill payment', async () => {
+      const rows = await repo.totalsByCategory('ana', '2026-11');
+      expect(rows.map((r) => [r.categoryId, r.total.cents])).toEqual([
+        ['c-food', 1000],
+        ['c-bus', 300],
+      ]);
+    });
+
+    it('by day ignores the day that only has a bill payment', async () => {
+      const rows = await repo.totalsByDay('ana', '2026-11');
+      expect(rows.map((r) => [r.date, r.total.cents])).toEqual([
+        ['2026-11-02', 1000],
+        ['2026-11-11', 300],
+      ]);
+    });
+
+    it('monthly evolution ignores the bill payments of every month', async () => {
+      const rows = await repo.totalsByMonth('ana', '2026-10', '2026-11');
+      expect(rows.map((r) => [r.month, r.total.cents])).toEqual([['2026-11', 1300]]);
+      expect(await repo.totalsByMonth('bob', '2026-10', '2026-11')).toEqual([]);
+    });
+
+    it('the three grouped reports agree on the month total', async () => {
+      const byCategory = cents(await repo.totalsByCategory('ana', '2026-11')).reduce((a, b) => a + b);
+      const byDay = cents(await repo.totalsByDay('ana', '2026-11')).reduce((a, b) => a + b);
+      const byMonth = (await repo.totalsByMonth('ana', '2026-11', '2026-11'))[0].total.cents;
+      expect([byCategory, byDay, byMonth]).toEqual([1300, 1300, 1300]);
+    });
+
+    it('the account outflow counts the bill payment and leaves the credit purchase out', async () => {
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(1300);
+      expect((await repo.creditSpent('ana', '2026-11')).cents).toBe(1000);
+    });
+  });
+
+  async function lend(id: string, userId: string) {
+    await prisma.client.loan.create({
+      data: {
+        id,
+        userId,
+        borrowerName: 'Devedor',
+        amountCents: BigInt(1_000_000),
+        dueDate: new Date('2027-12-31T00:00:00Z'),
+        paymentMethod: 'CASH',
+        lentAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    });
+  }
+
+  async function receive(id: string, loanId: string, userId: string, cents: number, date: string) {
+    await prisma.client.loanPayment.create({
+      data: {
+        id,
+        loanId,
+        userId,
+        amountCents: BigInt(cents),
+        method: 'CASH',
+        paidAt: new Date(`${date}T00:00:00Z`),
+      },
+    });
+  }
+
+  describe('account outflow (everything but credit, bill payments included)', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 10, '2026-11-01', { method: 'PIX' });
+      await spend('ana', 'c-food', 20, '2026-11-30', { method: 'DEBIT' });
+      await spend('ana', 'c-food', 40, '2026-11-15', { method: 'CASH' });
+      await spend('ana', 'c-bus', 100, '2026-11-10', { method: 'PIX', isCardPayment: true });
+      await spend('ana', 'c-food', 1000, '2026-11-05', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 5, '2026-10-31');
+      await spend('ana', 'c-food', 7, '2026-12-01');
+      await spend('bob', 'c-food', 999, '2026-11-10');
+    });
+
+    it('sums debit, Pix, cash and the bill payment, and leaves the credit purchase out', async () => {
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(170);
+    });
+
+    it('counts the first and last day and leaves the neighbouring months out', async () => {
+      expect((await repo.accountOutflow('ana', '2026-10')).cents).toBe(5);
+      expect((await repo.accountOutflow('ana', '2026-12')).cents).toBe(7);
+    });
+
+    it('is scoped to the user and is zero for a month without spending', async () => {
+      expect((await repo.accountOutflow('bob', '2026-11')).cents).toBe(999);
+      expect((await repo.accountOutflow('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('credit purchases of the month', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 1000, '2026-11-01', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 200, '2026-11-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 50, '2026-11-15', { method: 'PIX' });
+      await spend('ana', 'c-food', 3, '2026-10-31', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 9, '2026-12-01', { method: 'CREDIT' });
+      await spend('bob', 'c-food', 999, '2026-11-10', { method: 'CREDIT' });
+    });
+
+    it('sums only credit purchases dated inside the month', async () => {
+      expect((await repo.creditSpent('ana', '2026-11')).cents).toBe(1200);
+      expect((await repo.creditSpent('ana', '2026-10')).cents).toBe(3);
+      expect((await repo.creditSpent('ana', '2026-12')).cents).toBe(9);
+    });
+
+    it('is scoped to the user and is zero without credit purchases', async () => {
+      expect((await repo.creditSpent('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.creditSpent('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('loan payments received', () => {
+    beforeEach(async () => {
+      await lend('l-ana', 'ana');
+      await lend('l-bob', 'bob');
+      await receive('p1', 'l-ana', 'ana', 100, '2026-11-01');
+      await receive('p2', 'l-ana', 'ana', 200, '2026-11-30');
+      await receive('p3', 'l-ana', 'ana', 400, '2026-10-31');
+      await receive('p4', 'l-ana', 'ana', 800, '2026-12-01');
+      await receive('p5', 'l-bob', 'bob', 999, '2026-11-10');
+    });
+
+    it('sums the payments by the day they were received, edges included', async () => {
+      expect((await repo.loanPaymentsReceived('ana', '2026-11')).cents).toBe(300);
+      expect((await repo.loanPaymentsReceived('ana', '2026-10')).cents).toBe(400);
+      expect((await repo.loanPaymentsReceived('ana', '2026-12')).cents).toBe(800);
+    });
+
+    it('is scoped to the user and is zero without payments', async () => {
+      expect((await repo.loanPaymentsReceived('bob', '2026-11')).cents).toBe(999);
+      expect((await repo.loanPaymentsReceived('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.loanPaymentsReceived('ana', '2026-01')).cents).toBe(0);
+    });
+  });
+
+  describe('card charges and bill payments', () => {
+    beforeEach(async () => {
+      await spend('ana', 'c-food', 500, '2026-09-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 300, '2026-10-31', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 1000, '2026-11-01', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 200, '2026-11-30', { method: 'CREDIT' });
+      await spend('ana', 'c-food', 99, '2026-12-01', { method: 'CREDIT' });
+      await spend('ana', 'c-bus', 400, '2026-10-15', { isCardPayment: true });
+      await spend('ana', 'c-bus', 100, '2026-11-30', { isCardPayment: true });
+      await spend('ana', 'c-bus', 77, '2026-12-01', { isCardPayment: true });
+      await spend('ana', 'c-food', 50, '2026-11-15', { method: 'PIX' });
+      await spend('bob', 'c-food', 9999, '2026-11-10', { method: 'CREDIT' });
+      await spend('bob', 'c-bus', 8888, '2026-10-10', { isCardPayment: true });
+    });
+
+    it('splits credit charges into before the month and in the month, ignoring the next one', async () => {
+      const charges = await repo.cardCharges('ana', '2026-11');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([800, 1200]);
+    });
+
+    it('splits bill payments the same way, and a plain Pix expense is neither', async () => {
+      const payments = await repo.cardPayments('ana', '2026-11');
+      expect([payments.beforeMonth.cents, payments.inMonth.cents]).toEqual([400, 100]);
+    });
+
+    it('the first month of the data has nothing before it', async () => {
+      const charges = await repo.cardCharges('ana', '2026-09');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([0, 500]);
+    });
+
+    it('never mixes users and gives zeros without data', async () => {
+      const charges = await repo.cardCharges('bob', '2026-11');
+      const payments = await repo.cardPayments('bob', '2026-11');
+      expect([charges.beforeMonth.cents, charges.inMonth.cents]).toEqual([0, 9999]);
+      expect([payments.beforeMonth.cents, payments.inMonth.cents]).toEqual([8888, 0]);
+      const none = await repo.cardCharges('admin', '2026-11');
+      expect([none.beforeMonth.cents, none.inMonth.cents]).toEqual([0, 0]);
+    });
+  });
+
+  describe('money lent directly', () => {
+    beforeEach(async () => {
+      await lendDirect('ana', 10, { method: 'PIX', lentAt: '2026-11-01' });
+      await lendDirect('ana', 20, { method: 'CASH', lentAt: '2026-11-30' });
+      await lendDirect('ana', 40, { method: 'DEBIT', lentAt: '2026-11-15' });
+      await lendDirect('ana', 1000, { method: 'CREDIT', lentAt: '2026-11-05' });
+      await lendDirect('ana', 300, { method: 'CREDIT', lentAt: '2026-10-31' });
+      await lendDirect('ana', 500, { method: 'CREDIT', lentAt: '2025-12-31' });
+      await lendDirect('ana', 7, { method: 'PIX', lentAt: '2026-12-01' });
+      await lendDirect('ana', 90, { method: 'CREDIT', lentAt: '2026-12-01' });
+      await lendDirect('bob', 999, { method: 'PIX', lentAt: '2026-11-10' });
+      await lendDirect('bob', 888, { method: 'CREDIT', lentAt: '2026-11-10' });
+      // A loan born from an expense is already counted through the expense: never twice.
+      const pix = await spend('ana', 'c-food', 4000, '2026-11-10', { method: 'PIX' });
+      const credit = await spend('ana', 'c-food', 6000, '2026-11-11', { method: 'CREDIT' });
+      await lendDirect('ana', 4000, { fromExpense: pix });
+      await lendDirect('ana', 6000, { fromExpense: credit });
+    });
+
+    const split = (s: { beforeMonth: { cents: number }; inMonth: { cents: number } }) => [
+      s.beforeMonth.cents,
+      s.inMonth.cents,
+    ];
+
+    it('the outflow sums the non credit loans lent in the month, edges included', async () => {
+      expect((await repo.directLoansOutflow('ana', '2026-11')).cents).toBe(70);
+      expect((await repo.directLoansOutflow('ana', '2026-12')).cents).toBe(7);
+      expect((await repo.directLoansOutflow('ana', '2026-10')).cents).toBe(0);
+    });
+
+    it('the credit loans split at the first day of the month', async () => {
+      expect(split(await repo.directLoansOnCredit('ana', '2026-11'))).toEqual([800, 1000]);
+      expect(split(await repo.directLoansOnCredit('ana', '2026-12'))).toEqual([1800, 90]);
+      expect(split(await repo.directLoansOnCredit('ana', '2026-01'))).toEqual([500, 0]);
+    });
+
+    it('crosses the year boundary (December to January)', async () => {
+      expect(split(await repo.directLoansOnCredit('ana', '2026-01'))).toEqual([500, 0]);
+      expect(split(await repo.directLoansOnCredit('ana', '2025-12'))).toEqual([0, 500]);
+      await lendDirect('ana', 11, { method: 'PIX', lentAt: '2026-01-01' });
+      await lendDirect('ana', 13, { method: 'PIX', lentAt: '2025-12-31' });
+      expect((await repo.directLoansOutflow('ana', '2025-12')).cents).toBe(13);
+      expect((await repo.directLoansOutflow('ana', '2026-01')).cents).toBe(11);
+    });
+
+    it('is scoped to the user and is zero without loans', async () => {
+      expect((await repo.directLoansOutflow('bob', '2026-11')).cents).toBe(999);
+      expect(split(await repo.directLoansOnCredit('bob', '2026-11'))).toEqual([0, 888]);
+      expect((await repo.directLoansOutflow('admin', '2026-11')).cents).toBe(0);
+      expect(split(await repo.directLoansOnCredit('admin', '2026-11'))).toEqual([0, 0]);
     });
   });
 
@@ -120,8 +391,8 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
 
     it('counts 03-31 in March and not in April, and 04-01 in April and not in March', async () => {
-      expect((await repo.totalSpent('ana', '2026-03')).cents).toBe(6);
-      expect((await repo.totalSpent('ana', '2026-04')).cents).toBe(24);
+      expect((await repo.accountOutflow('ana', '2026-03')).cents).toBe(6);
+      expect((await repo.accountOutflow('ana', '2026-04')).cents).toBe(24);
       const march = await repo.totalsByDay('ana', '2026-03');
       expect(march.map((d) => d.date)).toEqual(['2026-03-01', '2026-03-31']);
       const april = await repo.totalsByDay('ana', '2026-04');
@@ -144,10 +415,10 @@ describe('PrismaReportRepository (Postgres)', () => {
       expect((await repo.totalsByDay('ana', '2028-02')).map((d) => [d.date, d.total.cents])).toEqual(
         [['2028-02-29', 100]],
       );
-      expect((await repo.totalSpent('ana', '2028-02')).cents).toBe(100);
-      expect((await repo.totalSpent('ana', '2028-03')).cents).toBe(200);
+      expect((await repo.accountOutflow('ana', '2028-02')).cents).toBe(100);
+      expect((await repo.accountOutflow('ana', '2028-03')).cents).toBe(200);
       await spend('ana', 'c-food', 7, '2026-02-28');
-      expect((await repo.totalSpent('ana', '2026-02')).cents).toBe(8);
+      expect((await repo.accountOutflow('ana', '2026-02')).cents).toBe(8);
     });
 
     it('crosses the year boundary (2025-11 to 2026-02)', async () => {
@@ -172,26 +443,26 @@ describe('PrismaReportRepository (Postgres)', () => {
     it('handles December to January in the by-day and total queries', async () => {
       await spend('ana', 'c-food', 5, '2026-12-31');
       await spend('ana', 'c-food', 9, '2027-01-01');
-      expect((await repo.totalSpent('ana', '2026-12')).cents).toBe(5);
-      expect((await repo.totalSpent('ana', '2027-01')).cents).toBe(9);
+      expect((await repo.accountOutflow('ana', '2026-12')).cents).toBe(5);
+      expect((await repo.accountOutflow('ana', '2027-01')).cents).toBe(9);
     });
   });
 
   describe('month window at the edges of the supported years', () => {
     it('month 0050-01 is year 50, not 1950: a 1949 expense is not included', async () => {
       await spend('ana', 'c-food', 7, '1949-05-05');
-      expect((await repo.totalSpent('ana', '0050-01')).cents).toBe(0);
+      expect((await repo.accountOutflow('ana', '0050-01')).cents).toBe(0);
       expect(await repo.totalsByCategory('ana', '0050-01')).toEqual([]);
       expect(await repo.totalsByDay('ana', '0050-01')).toEqual([]);
       expect(await repo.totalsByMonth('ana', '0050-01', '0050-01')).toEqual([]);
-      expect((await repo.totalSpent('ana', '1949-05')).cents).toBe(7);
+      expect((await repo.accountOutflow('ana', '1949-05')).cents).toBe(7);
     });
 
     it('works at the first and last accepted months (no 500)', async () => {
       await spend('ana', 'c-food', 3, '1900-01-01');
       await spend('ana', 'c-food', 4, '9998-12-31');
-      expect((await repo.totalSpent('ana', '1900-01')).cents).toBe(3);
-      expect((await repo.totalSpent('ana', '9998-12')).cents).toBe(4);
+      expect((await repo.accountOutflow('ana', '1900-01')).cents).toBe(3);
+      expect((await repo.accountOutflow('ana', '9998-12')).cents).toBe(4);
       expect(cents(await repo.totalsByDay('ana', '9998-12'))).toEqual([4]);
       expect(cents(await repo.totalsByCategory('ana', '1900-01'))).toEqual([3]);
       expect(cents(await repo.totalsByMonth('ana', '1900-01', '9998-12'))).toEqual([3, 4]);
@@ -227,8 +498,8 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
 
     it('never mixes the totals of other users, in any of the four reports', async () => {
-      expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(300);
-      expect((await repo.totalSpent('bob', '2026-11')).cents).toBe(1700);
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(300);
+      expect((await repo.accountOutflow('bob', '2026-11')).cents).toBe(1700);
       expect(cents(await repo.totalsByDay('ana', '2026-11'))).toEqual([100, 200]);
       expect((await repo.totalsByCategory('ana', '2026-11')).map((r) => r.categoryId)).toEqual([
         'c-ana',
@@ -238,21 +509,21 @@ describe('PrismaReportRepository (Postgres)', () => {
     });
 
     it('an admin with no spending of their own sees nothing of others', async () => {
-      expect((await repo.totalSpent('admin', '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow('admin', '2026-11')).cents).toBe(0);
       expect(await repo.totalsByCategory('admin', '2026-11')).toEqual([]);
       expect(await repo.totalsByDay('admin', '2026-11')).toEqual([]);
       expect(await repo.totalsByMonth('admin', '2026-01', '2026-12')).toEqual([]);
     });
 
     it('an unknown user id gets empty reports', async () => {
-      expect((await repo.totalSpent('nobody', '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow('nobody', '2026-11')).cents).toBe(0);
     });
 
     it('treats a hostile user id as a plain value, never as SQL', async () => {
       const evil = `ana' OR '1'='1`;
-      expect((await repo.totalSpent(evil, '2026-11')).cents).toBe(0);
+      expect((await repo.accountOutflow(evil, '2026-11')).cents).toBe(0);
       expect(await repo.totalsByDay(`x'; DROP TABLE "Expense"; --`, '2026-11')).toEqual([]);
-      expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(300);
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(300);
     });
   });
 
@@ -264,7 +535,7 @@ describe('PrismaReportRepository (Postgres)', () => {
       const actor = { id: 'ana', role: 'N' as const };
       const days = await new ByDay(repo).execute(actor, '2026-02');
       const cats = await new ByCategory(repo).execute(actor, '2026-02');
-      const spent = (await repo.totalSpent('ana', '2026-02')).cents;
+      const spent = (await repo.accountOutflow('ana', '2026-02')).cents;
       const daySum = days.days.reduce((s, d) => s + d.totalCents, 0);
       const catSum = cats.items.reduce((s, c) => s + c.totalCents, 0);
       expect(daySum).toBe(spent);
@@ -277,10 +548,10 @@ describe('PrismaReportRepository (Postgres)', () => {
   describe('money precision', () => {
     it('adds many maximum expenses exactly', async () => {
       await prisma.client.$executeRaw`
-        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-        SELECT 'max' || g, 'ana', 'c-food', 1000000000, true, '2026-11-01'::date
+        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+        SELECT 'max' || g, 'ana', 'c-food', 1000000000, true, 'PIX', '2026-11-01'::date
         FROM generate_series(1, 5000) g`;
-      expect((await repo.totalSpent('ana', '2026-11')).cents).toBe(5_000_000_000_000);
+      expect((await repo.accountOutflow('ana', '2026-11')).cents).toBe(5_000_000_000_000);
       expect((await repo.totalsByDay('ana', '2026-11'))[0].total.cents).toBe(5_000_000_000_000);
       expect((await repo.totalsByCategory('ana', '2026-11'))[0].total.cents).toBe(
         5_000_000_000_000,
@@ -298,14 +569,14 @@ describe('PrismaReportRepository (Postgres)', () => {
       try {
         await spend('ana', 'c-food', Number.MAX_SAFE_INTEGER, '2026-11-01');
         await spend('ana', 'c-food', Number.MAX_SAFE_INTEGER, '2026-11-01');
-        await expect(repo.totalSpent('ana', '2026-11')).rejects.toThrow(/safe integer/);
+        await expect(repo.accountOutflow('ana', '2026-11')).rejects.toThrow(/safe integer/);
         await expect(repo.totalsByDay('ana', '2026-11')).rejects.toThrow(/safe integer/);
         await expect(repo.totalsByCategory('ana', '2026-11')).rejects.toThrow(/safe integer/);
         await expect(repo.totalsByMonth('ana', '2026-11', '2026-11')).rejects.toThrow(
           /safe integer/,
         );
         // Another user's reports keep working.
-        expect((await repo.totalSpent('bob', '2026-11')).cents).toBe(0);
+        expect((await repo.accountOutflow('bob', '2026-11')).cents).toBe(0);
       } finally {
         await prisma.client.$executeRawUnsafe(`DELETE FROM "Expense"`);
         await prisma.client.$executeRawUnsafe(
@@ -318,12 +589,13 @@ describe('PrismaReportRepository (Postgres)', () => {
   describe('performance with 3 users and 10,000 expenses', () => {
     beforeEach(async () => {
       await prisma.client.$executeRaw`
-        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
+        INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
         SELECT 'p' || g,
                (ARRAY['ana','bob','admin'])[1 + (g % 3)],
                (ARRAY['c-food','c-bus'])[1 + (g % 2)],
                100 + (g % 5000),
                true,
+               'PIX',
                DATE '2025-01-01' + (g % 700)
         FROM generate_series(1, 10000) g`;
       await prisma.client.$executeRawUnsafe('ANALYZE "Expense"');
@@ -336,7 +608,7 @@ describe('PrismaReportRepository (Postgres)', () => {
         repo.totalsByCategory('ana', month),
         repo.totalsByDay('ana', month),
         repo.totalsByMonth('ana', '2025-01', '2026-12'),
-        repo.totalSpent('ana', month),
+        repo.accountOutflow('ana', month),
       ]);
       expect(Date.now() - started).toBeLessThan(2000);
       const expected = await prisma.client.$queryRaw<{ sum: bigint }[]>`
@@ -352,7 +624,10 @@ describe('PrismaReportRepository (Postgres)', () => {
       ['category', () => categoryTotalsSql('ana', '2025-06')],
       ['day', () => dayTotalsSql('ana', '2025-06')],
       ['month', () => monthTotalsSql('ana', '2025-01', '2025-06')],
-      ['total', () => totalSpentSql('ana', '2025-06')],
+      ['account outflow', () => accountOutflowSql('ana', '2025-06')],
+      ['credit', () => creditSpentSql('ana', '2025-06')],
+      ['card charges', () => cardChargesSql('ana', '2025-06')],
+      ['card payments', () => cardPaymentsSql('ana', '2025-06')],
     ])('the %s query can use the (userId, spentAt) index', async (_name, build) => {
       const sql = build();
       const plan = await prisma.client.$transaction(async (tx) => {

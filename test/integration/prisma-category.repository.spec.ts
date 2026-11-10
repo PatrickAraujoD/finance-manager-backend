@@ -44,6 +44,7 @@ describe('PrismaCategoryRepository (Postgres)', () => {
         categoryId,
         amountCents: 1050n,
         paidAlone: true,
+        paymentMethod: 'PIX',
         spentAt: new Date('2026-11-01T00:00:00Z'),
       },
     });
@@ -164,6 +165,7 @@ describe('PrismaCategoryRepository (Postgres)', () => {
           categoryId: 'c1',
           amountCents: 0n,
           paidAlone: true,
+          paymentMethod: 'PIX',
           spentAt: new Date('2026-11-01T00:00:00Z'),
         },
       }),

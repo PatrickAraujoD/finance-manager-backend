@@ -84,6 +84,8 @@ describe('control characters', () => {
         receiptId: null,
         amount: Money.fromCents(100),
         paidAlone: true,
+        paymentMethod: 'PIX' as const,
+        isCardPayment: false,
         spentAt: new Date('2026-11-01T00:00:00Z'),
       };
       expect(() => Expense.create({ ...base, description: `a${c}b` })).toThrow(ValidationError);
@@ -115,6 +117,8 @@ describe('entities reject NUL and lone surrogates in every text field', () => {
     receiptId: null,
     amount: Money.fromCents(100),
     paidAlone: true,
+    paymentMethod: 'PIX' as const,
+    isCardPayment: false,
     spentAt: new Date('2026-11-01T12:00:00Z'),
   };
   const user = {

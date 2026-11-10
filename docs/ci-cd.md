@@ -188,7 +188,8 @@ configurado com prefixo `chore`/`ci` sem `include: scope` pelo mesmo motivo.
   `healthy` e upload de PDF e PNG com OCR funcionando dentro do conteiner. Imagem de ~1,09 GB. O
   job `docker-build` ainda nao rodou no GitHub. NAO validado: o caminho de migrations pelo
   estagio `build` (`docker build --target build` + `prisma migrate deploy`), `hadolint` e Trivy.
-- Contagens da ultima rodada local: 1059 unitarios, 168 de integracao, 517 e2e.
+- Contagens da ultima rodada local (2026-11-10, branch `feature/credit-card`): 1548 unitarios, 250 de integracao
+  passando mais 1 falha conhecida (`env-file.spec.ts`, porta 3000 ocupada na maquina local), 803 e2e.
 - Cobertura de testes, testes de carga, SAST/CodeQL, varredura de imagem, SBOM.
 - Branch protection (exigir os jobs verdes para merge) e uma configuracao do repositorio no
   GitHub, nao do arquivo; precisa ser ligada em Settings > Branches.

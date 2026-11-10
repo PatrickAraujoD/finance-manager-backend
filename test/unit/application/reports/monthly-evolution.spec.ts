@@ -28,6 +28,17 @@ describe('MonthlyEvolution', () => {
     });
   });
 
+  it('ignores card bill payments but counts the credit purchases they pay for', async () => {
+    const { w, evolution } = await setup();
+    await w.spend('ana', 'c1', 1000, '2026-01-15', { paymentMethod: 'CREDIT' });
+    await w.spend('ana', 'c1', 1000, '2026-02-05', { isCardPayment: true });
+    const report = await evolution.execute(ana, { from: '2026-01', to: '2026-02' });
+    expect(report.months).toEqual([
+      { month: '2026-01', totalCents: 1000 },
+      { month: '2026-02', totalCents: 0 },
+    ]);
+  });
+
   it('crosses the year boundary', async () => {
     const { w, evolution } = await setup();
     await w.spend('ana', 'c1', 10, '2025-11-30');

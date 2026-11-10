@@ -39,10 +39,19 @@ const ROUTES: Record<string, { kind: Kind; scope: Scope }> = {
   'GET /expenses/:id': { kind: 'private', scope: 'by-id' },
   'PATCH /expenses/:id': { kind: 'private', scope: 'by-id' },
   'DELETE /expenses/:id': { kind: 'private', scope: 'by-id' },
+  'POST /loans': { kind: 'private', scope: 'by-id' },
+  'GET /loans': { kind: 'private', scope: 'self' },
+  'GET /loans/summary': { kind: 'private', scope: 'self' },
+  'GET /loans/:id': { kind: 'private', scope: 'by-id' },
+  'PATCH /loans/:id': { kind: 'private', scope: 'by-id' },
+  'DELETE /loans/:id': { kind: 'private', scope: 'by-id' },
+  'POST /loans/:id/payments': { kind: 'private', scope: 'by-id' },
+  'GET /loans/:id/payments': { kind: 'private', scope: 'by-id' },
   'GET /reports/by-category': { kind: 'private', scope: 'self' },
   'GET /reports/by-day': { kind: 'private', scope: 'self' },
   'GET /reports/monthly-evolution': { kind: 'private', scope: 'self' },
   'GET /reports/income-vs-spent': { kind: 'private', scope: 'self' },
+  'GET /reports/card': { kind: 'private', scope: 'self' },
 };
 
 const MONTH = '2026-11';
@@ -56,6 +65,7 @@ interface World {
   globalCategory: string;
   bCategory: string;
   bExpense: string;
+  bLoan: string;
   bReceipt: string;
 }
 
@@ -82,9 +92,13 @@ describe('authorization matrix', () => {
         categoryId: bCategory,
         amountCents: 4200,
         paidAlone: true,
+        paymentMethod: 'PIX',
         spentAt: '2026-11-03',
         description: 'gasto da bia',
       })
+    ).body.id;
+    const bLoan = (
+      await post('/loans', bia, { borrowerName: 'Devedor da Bia', dueDate: '2026-12-10', amountCents: 7700, paymentMethod: 'PIX', lentAt: '2026-11-03' })
     ).body.id;
     const bReceipt = randomUUID();
     await t.prisma.client.receipt.create({
@@ -95,7 +109,7 @@ describe('authorization matrix', () => {
       .set(...bearer(bia))
       .send({ amountCents: 900_000 });
     await t.prisma.client.user.update({ where: { id: dead.id }, data: { active: false } });
-    w = { admin, ana, bia, dead, globalCategory, bCategory, bExpense, bReceipt };
+    w = { admin, ana, bia, dead, globalCategory, bCategory, bExpense, bLoan, bReceipt };
   });
 
   const http = () => request(t.app.getHttpServer());
@@ -127,11 +141,20 @@ describe('authorization matrix', () => {
     'GET /expenses/:id': (a) => withAuth(http().get(`/expenses/${randomUUID()}`), a),
     'PATCH /expenses/:id': (a) => withAuth(http().patch(`/expenses/${randomUUID()}`), a).send({ description: 'x' }),
     'DELETE /expenses/:id': (a) => withAuth(http().delete(`/expenses/${randomUUID()}`), a),
+    'POST /loans': (a) => withAuth(http().post('/loans'), a).send({}),
+    'GET /loans': (a) => withAuth(http().get('/loans'), a),
+    'GET /loans/summary': (a) => withAuth(http().get('/loans/summary'), a),
+    'GET /loans/:id': (a) => withAuth(http().get(`/loans/${randomUUID()}`), a),
+    'PATCH /loans/:id': (a) => withAuth(http().patch(`/loans/${randomUUID()}`), a).send({ borrowerName: 'X' }),
+    'DELETE /loans/:id': (a) => withAuth(http().delete(`/loans/${randomUUID()}`), a),
+    'POST /loans/:id/payments': (a) => withAuth(http().post(`/loans/${randomUUID()}/payments`), a).send({}),
+    'GET /loans/:id/payments': (a) => withAuth(http().get(`/loans/${randomUUID()}/payments`), a),
     'GET /reports/by-category': (a) => withAuth(http().get(`/reports/by-category?month=${MONTH}`), a),
     'GET /reports/by-day': (a) => withAuth(http().get(`/reports/by-day?month=${MONTH}`), a),
     'GET /reports/monthly-evolution': (a) =>
       withAuth(http().get('/reports/monthly-evolution?from=2026-01&to=2026-03'), a),
     'GET /reports/income-vs-spent': (a) => withAuth(http().get(`/reports/income-vs-spent?month=${MONTH}`), a),
+    'GET /reports/card': (a) => withAuth(http().get(`/reports/card?month=${MONTH}`), a),
   };
 
   const protectedRoutes = Object.entries(ROUTES).filter(([, r]) => r.kind !== 'public').map(([k]) => k);
@@ -140,8 +163,11 @@ describe('authorization matrix', () => {
   const stable = (headers: Record<string, unknown>) => {
     const h = { ...headers };
     delete h['date'];
-    // The remaining-requests counters go down with every request by design.
-    for (const k of Object.keys(h)) if (k.startsWith('x-ratelimit-remaining')) delete h[k];
+    // The remaining-requests counters go down with every request by design, and the reset
+    // countdown moves with the clock (it can differ by a second between two requests).
+    for (const k of Object.keys(h)) {
+      if (k.startsWith('x-ratelimit-remaining') || k.startsWith('x-ratelimit-reset')) delete h[k];
+    }
     return h;
   };
   const same = (a: request.Response, b: request.Response) => {
@@ -283,6 +309,40 @@ describe('authorization matrix', () => {
     'DELETE /expenses/:id': [
       { name: 'delete', call: (a, x) => withAuth(http().delete(`/expenses/${x === 'foreign' ? w.bExpense : randomUUID()}`), a) },
     ],
+    'GET /loans/:id': [
+      { name: 'read', call: (a, x) => withAuth(http().get(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}`), a) },
+    ],
+    'PATCH /loans/:id': [
+      { name: 'edit', call: (a, x) => withAuth(http().patch(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}`), a).send({ borrowerName: 'Roubado' }) },
+    ],
+    'DELETE /loans/:id': [
+      { name: 'delete', call: (a, x) => withAuth(http().delete(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}`), a) },
+    ],
+    'POST /loans/:id/payments': [
+      {
+        name: 'pay a foreign loan',
+        call: (a, x) =>
+          withAuth(http().post(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}/payments`), a).send({
+            amountCents: 100,
+            method: 'CASH',
+            paidAt: '2026-11-08',
+          }),
+      },
+    ],
+    'GET /loans/:id/payments': [
+      { name: 'list', call: (a, x) => withAuth(http().get(`/loans/${x === 'foreign' ? w.bLoan : randomUUID()}/payments`), a) },
+    ],
+    'POST /loans': [
+      {
+        name: 'lend against a foreign expense',
+        call: (a, x) =>
+          withAuth(http().post('/loans'), a).send({
+            borrowerName: 'Carlos',
+            dueDate: '2026-12-10',
+            expenseId: x === 'foreign' ? w.bExpense : randomUUID(),
+          }),
+      },
+    ],
     'GET /receipts/:id/file': [
       { name: 'download', call: (a, x) => withAuth(http().get(`/receipts/${x === 'foreign' ? w.bReceipt : randomUUID()}/file`), a) },
     ],
@@ -294,6 +354,7 @@ describe('authorization matrix', () => {
             categoryId: x === 'foreign' ? w.bCategory : randomUUID(),
             amountCents: 100,
             paidAlone: true,
+            paymentMethod: 'PIX',
             spentAt: '2026-11-04',
           }),
       },
@@ -305,6 +366,7 @@ describe('authorization matrix', () => {
             receiptId: x === 'foreign' ? w.bReceipt : randomUUID(),
             amountCents: 100,
             paidAlone: true,
+            paymentMethod: 'PIX',
             spentAt: '2026-11-04',
           }),
       },
@@ -340,6 +402,10 @@ describe('authorization matrix', () => {
         name: 'Segredo da Bia',
       });
       expect(await t.prisma.client.receipt.count({ where: { id: w.bReceipt } })).toBe(1);
+      const loan = await t.prisma.client.loan.findUniqueOrThrow({ where: { id: w.bLoan } });
+      expect([loan.borrowerName, Number(loan.amountCents), loan.userId]).toEqual(['Devedor da Bia', 7700, w.bia.id]);
+      expect(await t.prisma.client.loan.count()).toBe(1);
+      expect(await t.prisma.client.loanPayment.count()).toBe(0);
     });
   });
 
@@ -374,6 +440,21 @@ describe('authorization matrix', () => {
       const byCat = await http().get(`/expenses?categoryId=${w.bCategory}`).set(...bearer(s));
       expect(byCat.body).toMatchObject({ items: [], total: 0 });
     },
+    'GET /loans': async (s) => {
+      const res = await http().get('/loans').set(...bearer(s));
+      expect(res.body).toMatchObject({ items: [], total: 0 });
+      expect(JSON.stringify(res.body)).not.toContain('Devedor da Bia');
+      const byBorrower = await http().get('/loans?borrower=Devedor%20da%20Bia').set(...bearer(s));
+      expect(byBorrower.body).toMatchObject({ items: [], total: 0 });
+    },
+    'GET /loans/summary': async (s) => {
+      const res = await http().get('/loans/summary').set(...bearer(s));
+      expect(res.body.items).toEqual([]);
+      expect(res.body.totals.totalLentCents).toBe(0);
+      expect(JSON.stringify(res.body)).not.toContain('Devedor da Bia');
+      const byBorrower = await http().get('/loans/summary?borrower=Devedor%20da%20Bia').set(...bearer(s));
+      expect(byBorrower.body.items).toEqual([]);
+    },
     'GET /reports/by-category': async (s) => {
       const res = await http().get(`/reports/by-category?month=${MONTH}`).set(...bearer(s));
       expect(res.body).toEqual({ month: MONTH, totalCents: 0, items: [] });
@@ -388,7 +469,18 @@ describe('authorization matrix', () => {
     },
     'GET /reports/income-vs-spent': async (s) => {
       const res = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(s));
-      expect(res.body).toMatchObject({ incomeCents: null, spentCents: 0, remainingCents: null, percentSpent: null });
+      expect(res.body).toMatchObject({
+        incomeCents: null,
+        spentCents: 0,
+        receivedCents: 0,
+        creditSpentCents: 0,
+        remainingCents: null,
+        percentSpent: null,
+      });
+    },
+    'GET /reports/card': async (s) => {
+      const res = await http().get(`/reports/card?month=${MONTH}`).set(...bearer(s));
+      expect(res.body).toEqual({ month: MONTH, openingCents: 0, chargedCents: 0, paidCents: 0, balanceCents: 0 });
     },
   };
 
@@ -401,8 +493,24 @@ describe('authorization matrix', () => {
     it('shows Bia her own data through the very same routes (the check is not vacuous)', async () => {
       const list = await http().get('/expenses').set(...bearer(w.bia));
       expect(list.body.total).toBe(1);
+      const loans = await http().get('/loans').set(...bearer(w.bia));
+      expect(loans.body.total).toBe(1);
+      const loanSummary = await http().get('/loans/summary').set(...bearer(w.bia));
+      expect(loanSummary.body.totals.totalLentCents).toBe(7700);
       const rep = await http().get(`/reports/income-vs-spent?month=${MONTH}`).set(...bearer(w.bia));
-      expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 4200 });
+      // The Pix expense (4200) plus the Pix loan (7700) lent in the month leave the account.
+      expect(rep.body).toMatchObject({ incomeCents: 900_000, spentCents: 11_900 });
+      // Bia's card figures come from a credit purchase made here, so the zeros above are not vacuous.
+      const credit = await post('/expenses', w.bia, {
+        categoryId: w.bCategory,
+        amountCents: 3300,
+        paidAlone: true,
+        paymentMethod: 'CREDIT',
+        spentAt: '2026-11-04',
+      });
+      expect(credit.status).toBe(201);
+      const card = await http().get(`/reports/card?month=${MONTH}`).set(...bearer(w.bia));
+      expect(card.body).toEqual({ month: MONTH, openingCents: 0, chargedCents: 3300, paidCents: 0, balanceCents: 3300 });
       expect(PASSWORD).toBeDefined();
     });
   });

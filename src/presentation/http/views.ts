@@ -1,11 +1,18 @@
 import { CategoryReport } from '../../application/use-cases/reports/by-category';
 import { DayReport } from '../../application/use-cases/reports/by-day';
+import { LoanDetails } from '../../application/use-cases/loans/get-loan';
 import { IncomeVsSpentReport } from '../../application/use-cases/reports/income-vs-spent';
+import { CardBalanceReport } from '../../application/use-cases/reports/get-card-balance';
 import { EvolutionReport } from '../../application/use-cases/reports/monthly-evolution';
 import { formatCalendarDate } from '../../domain/calendar-date';
+import { LoanPayment } from '../../domain/entities/loan-payment';
 import { Category } from '../../domain/entities/category';
 import { Expense } from '../../domain/entities/expense';
 import { User } from '../../domain/entities/user';
+import { LoanStatus } from '../../domain/loan-balance';
+import { LoanSummary, LoanSummaryTotals } from '../../domain/loan-summary';
+import { LoanPaymentMethod } from '../../domain/loan-payment-method';
+import { PaymentMethod } from '../../domain/payment-method';
 import { Role } from '../../domain/role';
 
 export interface UserView {
@@ -45,6 +52,8 @@ export interface ExpenseView {
   receiptId: string | null;
   amountCents: number;
   paidAlone: boolean;
+  paymentMethod: PaymentMethod;
+  isCardPayment: boolean;
   /** Calendar date, `YYYY-MM-DD`. */
   spentAt: string;
   description: string | null;
@@ -59,9 +68,108 @@ export function toExpenseView(expense: Expense): ExpenseView {
     receiptId: expense.receiptId,
     amountCents: expense.amount.cents,
     paidAlone: expense.paidAlone,
+    paymentMethod: expense.paymentMethod,
+    isCardPayment: expense.isCardPayment,
     spentAt: formatCalendarDate(expense.spentAt),
     description: expense.description ?? null,
     createdAt: expense.createdAt,
+  };
+}
+
+export interface LoanView {
+  id: string;
+  borrowerName: string;
+  amountCents: number;
+  /** Calendar date, `YYYY-MM-DD`. */
+  dueDate: string;
+  expenseId: string | null;
+  /** How the money left; null when the loan comes from an expense (it inherits the expense's). */
+  paymentMethod: PaymentMethod | null;
+  /** Calendar date, `YYYY-MM-DD`; null like paymentMethod. */
+  lentAt: string | null;
+  paidCents: number;
+  remainingCents: number;
+  status: LoanStatus;
+  createdAt: Date | null;
+}
+
+/** Explicit field list: `userId` and anything added to Loan later never reach a response. */
+export function toLoanView({ loan, balance }: LoanDetails): LoanView {
+  return {
+    id: loan.id,
+    borrowerName: loan.borrowerName,
+    amountCents: loan.amount.cents,
+    dueDate: formatCalendarDate(loan.dueDate),
+    expenseId: loan.expenseId,
+    paymentMethod: loan.paymentMethod,
+    lentAt: loan.lentAt ? formatCalendarDate(loan.lentAt) : null,
+    paidCents: balance.paid.cents,
+    remainingCents: balance.remaining.cents,
+    status: balance.status,
+    createdAt: loan.createdAt,
+  };
+}
+
+export interface LoanPaymentView {
+  id: string;
+  loanId: string;
+  amountCents: number;
+  method: LoanPaymentMethod;
+  receiptId: string | null;
+  /** Calendar date, `YYYY-MM-DD`. */
+  paidAt: string;
+  createdAt: Date | null;
+}
+
+/** Explicit field list: `userId` and anything added to LoanPayment later never reach a response. */
+export function toLoanPaymentView(payment: LoanPayment): LoanPaymentView {
+  return {
+    id: payment.id,
+    loanId: payment.loanId,
+    amountCents: payment.amount.cents,
+    method: payment.method,
+    receiptId: payment.receiptId,
+    paidAt: formatCalendarDate(payment.paidAt),
+    createdAt: payment.createdAt,
+  };
+}
+
+export interface BorrowerSummaryView extends LoanSummaryTotals {
+  borrowerName: string;
+  loansCount: number;
+  overdueLoansCount: number;
+  /** Calendar date `YYYY-MM-DD` of the earliest loan with a balance; null when all are settled. */
+  nextDueDate: string | null;
+}
+
+export interface LoanSummaryView {
+  items: BorrowerSummaryView[];
+  totals: LoanSummaryTotals;
+  truncated: boolean;
+}
+
+/** Explicit field list for each person and for the totals; nothing else of the domain leaks. */
+export function toLoanSummaryView(summary: LoanSummary): LoanSummaryView {
+  return {
+    items: summary.items.map((item) => ({
+      borrowerName: item.borrowerName,
+      loansCount: item.loansCount,
+      totalLentCents: item.totalLentCents,
+      paidCents: item.paidCents,
+      owedCents: item.owedCents,
+      upcomingCents: item.upcomingCents,
+      overdueCents: item.overdueCents,
+      overdueLoansCount: item.overdueLoansCount,
+      nextDueDate: item.nextDueDate ? formatCalendarDate(item.nextDueDate) : null,
+    })),
+    totals: {
+      totalLentCents: summary.totals.totalLentCents,
+      paidCents: summary.totals.paidCents,
+      owedCents: summary.totals.owedCents,
+      upcomingCents: summary.totals.upcomingCents,
+      overdueCents: summary.totals.overdueCents,
+    },
+    truncated: summary.truncated,
   };
 }
 
@@ -118,6 +226,8 @@ export interface IncomeVsSpentView {
   month: string;
   incomeCents: number | null;
   spentCents: number;
+  receivedCents: number;
+  creditSpentCents: number;
   remainingCents: number | null;
   percentSpent: number | null;
 }
@@ -127,7 +237,27 @@ export function toIncomeVsSpentView(report: IncomeVsSpentReport): IncomeVsSpentV
     month: report.month,
     incomeCents: report.incomeCents,
     spentCents: report.spentCents,
+    receivedCents: report.receivedCents,
+    creditSpentCents: report.creditSpentCents,
     remainingCents: report.remainingCents,
     percentSpent: report.percentSpent,
+  };
+}
+
+export interface CardBalanceView {
+  month: string;
+  openingCents: number;
+  chargedCents: number;
+  paidCents: number;
+  balanceCents: number;
+}
+
+export function toCardBalanceView(report: CardBalanceReport): CardBalanceView {
+  return {
+    month: report.month,
+    openingCents: report.openingCents,
+    chargedCents: report.chargedCents,
+    paidCents: report.paidCents,
+    balanceCents: report.balanceCents,
   };
 }

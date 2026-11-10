@@ -3,6 +3,7 @@ import { Category } from '../../../domain/entities/category';
 import { MAX_EXPENSE_CENTS } from '../../../domain/entities/expense';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
 import { Money } from '../../../domain/money';
+import { PaymentMethod, parsePaymentMethod } from '../../../domain/payment-method';
 import { requireCleanText } from '../../../domain/validation';
 import { Actor } from '../../actor';
 import { CategoryRepository } from '../../ports/category-repository';
@@ -29,12 +30,13 @@ export function toAmount(value: unknown): Money {
   return Money.fromCents(value);
 }
 
-export function toSpentAt(value: unknown, clock: Clock): Date {
-  const date = parseCalendarDate(value as string, 'spentAt');
+/** `field` names the input in the error messages; other dates (a loan payment's) share the rule. */
+export function toSpentAt(value: unknown, clock: Clock, field = 'spentAt'): Date {
+  const date = parseCalendarDate(value as string, field);
   const now = clock.now();
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   if (date.getTime() > today + MAX_FUTURE_DAYS * DAY_MS) {
-    throw new ValidationError('spentAt cannot be in the future');
+    throw new ValidationError(`${field} cannot be in the future`);
   }
   return date;
 }
@@ -55,6 +57,19 @@ export function toDescription(value: unknown): string | undefined {
 export function toPaidAlone(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new ValidationError('paidAlone must be true or false');
   return value;
+}
+
+/** Absent means a regular expense (false); anything but a boolean is a 400. */
+export function toIsCardPayment(value: unknown): boolean {
+  if (value === undefined) return false;
+  if (typeof value !== 'boolean') throw new ValidationError('isCardPayment must be true or false');
+  return value;
+}
+
+/** CREDIT, DEBIT, PIX or CASH; anything else, including a missing value, is a 400. */
+export function toPaymentMethod(value: unknown): PaymentMethod {
+  if (typeof value !== 'string') throw new ValidationError('paymentMethod must be CREDIT, DEBIT, PIX or CASH');
+  return parsePaymentMethod(value);
 }
 
 /** A category the actor may use: global or their own. Anything else looks like a missing one. */

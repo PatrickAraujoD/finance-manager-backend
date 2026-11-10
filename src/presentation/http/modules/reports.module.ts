@@ -3,6 +3,7 @@ import { IncomeRepository } from '../../../application/ports/income-repository';
 import { ReportRepository } from '../../../application/ports/report-repository';
 import { ByCategory } from '../../../application/use-cases/reports/by-category';
 import { ByDay } from '../../../application/use-cases/reports/by-day';
+import { GetCardBalance } from '../../../application/use-cases/reports/get-card-balance';
 import { IncomeVsSpent } from '../../../application/use-cases/reports/income-vs-spent';
 import { MonthlyEvolution } from '../../../application/use-cases/reports/monthly-evolution';
 import { ReportsController } from '../controllers/reports.controller';
@@ -31,6 +32,11 @@ import { INCOME_REPOSITORY, REPORT_REPOSITORY } from '../tokens';
       inject: [REPORT_REPOSITORY, INCOME_REPOSITORY],
       useFactory: (reports: ReportRepository, incomes: IncomeRepository) =>
         new IncomeVsSpent(reports, incomes),
+    },
+    {
+      provide: GetCardBalance,
+      inject: [REPORT_REPOSITORY],
+      useFactory: (reports: ReportRepository) => new GetCardBalance(reports),
     },
   ],
 })

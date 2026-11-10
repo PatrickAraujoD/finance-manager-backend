@@ -4,7 +4,8 @@ import { ExpenseRepository } from '../../ports/expense-repository';
 
 /**
  * Deletes an expense of the actor. The receipt row and its stored file are NOT deleted: the
- * receipt only becomes free to back another expense. Someone else's expense is a NotFoundError.
+ * receipt only becomes free to back another expense. Someone else's expense is a NotFoundError;
+ * an expense that already has a loan cannot be deleted (ConflictError from the repository).
  */
 export class DeleteExpense {
   constructor(private readonly expenses: ExpenseRepository) {}

@@ -1,6 +1,7 @@
 import { Expense } from '../../src/domain/entities/expense';
 import { ConflictError, NotFoundError } from '../../src/domain/errors';
 import { Money } from '../../src/domain/money';
+import { PaymentMethod } from '../../src/domain/payment-method';
 import { PrismaCategoryRepository } from '../../src/infrastructure/prisma/prisma-category.repository';
 import { PrismaExpenseRepository } from '../../src/infrastructure/prisma/prisma-expense.repository';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -17,6 +18,8 @@ function expense(
     receiptId: string | null;
     cents: number;
     paidAlone: boolean;
+    paymentMethod: PaymentMethod;
+    isCardPayment: boolean;
     spentAt: string;
     description: string;
   }> = {},
@@ -28,6 +31,8 @@ function expense(
     receiptId: over.receiptId ?? null,
     amount: Money.fromCents(over.cents ?? 1050),
     paidAlone: over.paidAlone ?? true,
+    paymentMethod: over.paymentMethod ?? 'PIX',
+    isCardPayment: over.isCardPayment ?? false,
     spentAt: day(over.spentAt ?? '2026-11-01'),
     description: over.description,
   });
@@ -75,6 +80,44 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     expect(found?.spentAt.toISOString()).toBe('2026-11-01T00:00:00.000Z');
     expect(await repo.findById('u2', 'e1')).toBeNull();
     expect(await repo.findById('u1', 'missing')).toBeNull();
+  });
+
+  it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)('persists the payment method %s', async (method) => {
+    await repo.save(expense('e1', { paymentMethod: method }));
+    expect((await repo.findById('u1', 'e1'))?.paymentMethod).toBe(method);
+    const rows = await prisma.client.$queryRaw<{ m: string }[]>`
+      SELECT "paymentMethod"::text AS m FROM "Expense" WHERE id = 'e1'`;
+    expect(rows[0].m).toBe(method);
+  });
+
+  it('requires the payment method in the database itself (no default, only the 4 values)', async () => {
+    const insert = (id: string, columns: string, values: string) =>
+      prisma.client.$executeRawUnsafe(
+        `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone"${columns},"spentAt")
+         VALUES ('${id}','u1','c1',100,true${values},'2026-11-01')`,
+      );
+    await expect(insert('no-method', '', '')).rejects.toThrow();
+    await expect(insert('cheque', ',"paymentMethod"', ",'CHEQUE'")).rejects.toThrow();
+    await expect(insert('ok', ',"paymentMethod"', ",'DEBIT'")).resolves.toBe(1);
+  });
+
+  it.each([true, false])('persists isCardPayment=%s', async (flag) => {
+    await repo.save(expense('e1', { isCardPayment: flag }));
+    expect((await repo.findById('u1', 'e1'))?.isCardPayment).toBe(flag);
+    const rows = await prisma.client.$queryRaw<{ f: boolean }[]>`
+      SELECT "isCardPayment" AS f FROM "Expense" WHERE id = 'e1'`;
+    expect(rows[0].f).toBe(flag);
+  });
+
+  it('defaults isCardPayment to false in the database and refuses NULL', async () => {
+    const insert = (id: string, extra: string) =>
+      prisma.client.$executeRawUnsafe(
+        `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod"${extra ? ',"isCardPayment"' : ''},"spentAt")
+         VALUES ('${id}','u1','c1',100,true,'PIX'${extra ? `,${extra}` : ''},'2026-11-01')`,
+      );
+    await insert('implicit', '');
+    expect((await repo.findById('u1', 'implicit'))?.isCardPayment).toBe(false);
+    await expect(insert('nulled', 'NULL')).rejects.toThrow();
   });
 
   it('fills createdAt on read and keeps it through an update', async () => {
@@ -145,9 +188,16 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       await repo.save(expense('e1', { receiptId: 'r1' }));
       await expect(
         prisma.client.$executeRaw`INSERT INTO "Expense"
-          ("id","userId","categoryId","receiptId","amountCents","paidAlone","spentAt")
-          VALUES ('x','u1','c1','r1',100,true,'2026-11-01')`,
+          ("id","userId","categoryId","receiptId","amountCents","paidAlone","paymentMethod","spentAt")
+          VALUES ('x','u1','c1','r1',100,true,'PIX','2026-11-01')`,
       ).rejects.toThrow();
+    });
+
+    it('tells whether a receipt already backs an expense, whoever owns it', async () => {
+      expect(await repo.isReceiptUsed('r1')).toBe(false);
+      await repo.save(expense('e1', { receiptId: 'r1' }));
+      expect(await repo.isReceiptUsed('r1')).toBe(true);
+      expect(await repo.isReceiptUsed('r2')).toBe(false);
     });
 
     it('frees the receipt after the expense is deleted', async () => {
@@ -168,6 +218,8 @@ describe('PrismaExpenseRepository (Postgres)', () => {
         receiptId: 'r2',
         amount: Money.fromCents(777),
         paidAlone: false,
+        paymentMethod: 'DEBIT',
+        isCardPayment: false,
         spentAt: day('2026-10-10'),
       });
       expect(await repo.update(changed)).toBe(false);
@@ -178,13 +230,17 @@ describe('PrismaExpenseRepository (Postgres)', () => {
         receiptId: 'r2',
         amount: Money.fromCents(777),
         paidAlone: false,
+        paymentMethod: 'DEBIT',
+        isCardPayment: true,
         spentAt: day('2026-10-10'),
       });
       expect(await repo.update(own)).toBe(true);
       const stored = await repo.findById('u1', 'e1');
       expect(stored?.categoryId).toBe('c2');
+      expect(stored?.paymentMethod).toBe('DEBIT');
       expect(stored?.amount.cents).toBe(777);
       expect(stored?.paidAlone).toBe(false);
+      expect(stored?.isCardPayment).toBe(true);
       expect(stored?.spentAt.toISOString()).toBe('2026-10-10T00:00:00.000Z');
       expect(stored?.description).toBeUndefined();
       expect(stored?.receiptId).toBe('r1');
@@ -210,6 +266,25 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       expect(await repo.delete('u1', 'e1')).toBe(false);
       expect(await prisma.client.receipt.count({ where: { id: 'r1' } })).toBe(1);
       expect(await prisma.client.category.count({ where: { id: 'c1' } })).toBe(1);
+    });
+
+    it('refuses to delete an expense that backs a loan (ConflictError from the P2003 FK)', async () => {
+      await repo.save(expense('e1'));
+      await prisma.client.loan.create({
+        data: {
+          id: 'l1',
+          userId: 'u1',
+          borrowerName: 'Carlos',
+          amountCents: 1050n,
+          dueDate: day('2026-12-10'),
+          expenseId: 'e1',
+        },
+      });
+      await expect(repo.delete('u1', 'e1')).rejects.toBeInstanceOf(ConflictError);
+      expect(await repo.findById('u1', 'e1')).not.toBeNull();
+      // Once the loan is gone the expense can be deleted again.
+      await prisma.client.loan.delete({ where: { id: 'l1' } });
+      expect(await repo.delete('u1', 'e1')).toBe(true);
     });
   });
 
@@ -255,6 +330,34 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       ).toBe(2);
     });
 
+    it('filters by payment method, alone and combined with other filters', async () => {
+      await repo.save(expense('p1', { paymentMethod: 'CREDIT', spentAt: '2026-11-03' }));
+      await repo.save(expense('p2', { paymentMethod: 'DEBIT', spentAt: '2026-11-04', categoryId: 'c2' }));
+      await repo.save(expense('p3', { userId: 'u2', paymentMethod: 'CREDIT' }));
+      expect(ids(await repo.listByUser('u1', { paymentMethod: 'CREDIT' }))).toEqual(['p1']);
+      expect(ids(await repo.listByUser('u1', { paymentMethod: 'DEBIT', categoryId: 'c2' }))).toEqual([
+        'p2',
+      ]);
+      expect(await repo.countByUser('u1', { paymentMethod: 'CREDIT' })).toBe(1);
+      // The six listing fixtures default to PIX.
+      expect(await repo.countByUser('u1', { paymentMethod: 'PIX' })).toBe(5);
+      expect(await repo.countByUser('u2', { paymentMethod: 'CREDIT' })).toBe(1);
+    });
+
+    it('filters card bill payments in and out, alone and combined', async () => {
+      await repo.save(expense('f1', { isCardPayment: true, spentAt: '2026-11-03' }));
+      await repo.save(expense('f2', { isCardPayment: true, spentAt: '2026-10-03', paymentMethod: 'CASH' }));
+      await repo.save(expense('f3', { userId: 'u2', isCardPayment: true }));
+      expect(ids(await repo.listByUser('u1', { isCardPayment: true }))).toEqual(['f1', 'f2']);
+      expect(await repo.countByUser('u1', { isCardPayment: true })).toBe(2);
+      expect(await repo.countByUser('u1', { isCardPayment: false })).toBe(5);
+      expect(await repo.countByUser('u1', {})).toBe(7);
+      expect(
+        ids(await repo.listByUser('u1', { isCardPayment: true, paymentMethod: 'CASH' })),
+      ).toEqual(['f2']);
+      expect(await repo.countByUser('u2', { isCardPayment: true })).toBe(1);
+    });
+
     it('pages with limit/offset in the same stable order and counts the whole set', async () => {
       expect(ids(await repo.listByUser('u1', {}, { limit: 2, offset: 0 }))).toEqual(['d', 'c']);
       expect(ids(await repo.listByUser('u1', {}, { limit: 2, offset: 2 }))).toEqual(['b', 'a']);
@@ -269,8 +372,8 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       for (const cents of [0, -5]) {
         await expect(
           prisma.client.$executeRawUnsafe(
-            `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-             VALUES ('bad${Math.abs(cents)}','u1','c1',${cents},true,'2026-11-01')`,
+            `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+             VALUES ('bad${Math.abs(cents)}','u1','c1',${cents},true,'PIX','2026-11-01')`,
           ),
         ).rejects.toThrow();
       }
@@ -284,8 +387,8 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     it('rejects an amount above the ceiling in the database itself (CHECK)', async () => {
       const insert = (id: string, cents: number | string) =>
         prisma.client.$executeRawUnsafe(
-          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-           VALUES ('${id}','u1','c1',${cents},true,'2026-11-01')`,
+          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+           VALUES ('${id}','u1','c1',${cents},true,'PIX','2026-11-01')`,
         );
       await expect(insert('at-ceiling', 1_000_000_000)).resolves.toBe(1);
       await expect(insert('over-ceiling', 1_000_000_001)).rejects.toThrow();
@@ -299,8 +402,8 @@ describe('PrismaExpenseRepository (Postgres)', () => {
       );
       try {
         await prisma.client.$executeRawUnsafe(
-          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","spentAt")
-           VALUES ('huge','u1','c1',9007199254740993,true,'2026-11-01')`,
+          `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","spentAt")
+           VALUES ('huge','u1','c1',9007199254740993,true,'PIX','2026-11-01')`,
         );
         await expect(repo.findById('u1', 'huge')).rejects.toThrow(/safe integer/);
         await expect(repo.listByUser('u1', {})).rejects.toThrow(/safe integer/);

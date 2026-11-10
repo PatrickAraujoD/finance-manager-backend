@@ -3,10 +3,13 @@ import {
   DayTotal,
   MonthTotal,
   ReportRepository,
+  SplitTotal,
 } from '../../../src/application/ports/report-repository';
 import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from './fake-category-repository';
 import { FakeExpenseRepository } from './fake-expense-repository';
+import { FakeLoanPaymentRepository } from './fake-loan-payment-repository';
+import { FakeLoanRepository } from './fake-loan-repository';
 
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);
@@ -15,6 +18,8 @@ export class FakeReportRepository implements ReportRepository {
   constructor(
     private readonly expenses: FakeExpenseRepository,
     private readonly categories: FakeCategoryRepository,
+    private readonly loanPayments: FakeLoanPaymentRepository,
+    private readonly loans: FakeLoanRepository,
   ) {}
 
   private async sumBy<K extends string>(
@@ -24,7 +29,7 @@ export class FakeReportRepository implements ReportRepository {
   ): Promise<Map<K, number>> {
     const totals = new Map<K, number>();
     for (const e of await this.expenses.listByUser(userId, {})) {
-      if (!include(e.spentAt)) continue;
+      if (!include(e.spentAt) || e.isCardPayment) continue;
       const key = keyOf(e.spentAt, e.categoryId);
       totals.set(key, (totals.get(key) ?? 0) + e.amount.cents);
     }
@@ -71,12 +76,78 @@ export class FakeReportRepository implements ReportRepository {
       .map(([month, cents]) => ({ month, total: Money.fromCents(cents) }));
   }
 
-  async totalSpent(userId: string, month: string): Promise<Money> {
-    const totals = await this.sumBy(
-      userId,
-      () => 'all',
-      (d) => monthOf(d) === month,
-    );
-    return Money.fromCents(totals.get('all') ?? 0);
+  // Balance aggregates: same month boundaries as the SQL (UTC calendar dates, `YYYY-MM` strings
+  // compare in chronological order).
+  private async expenseTotal(
+    userId: string,
+    keep: (e: { paymentMethod: string; isCardPayment: boolean }) => boolean,
+    inWindow: (month: string) => boolean,
+  ): Promise<Money> {
+    let total = 0;
+    for (const e of await this.expenses.listByUser(userId, {})) {
+      if (keep(e) && inWindow(monthOf(e.spentAt))) total += e.amount.cents;
+    }
+    return Money.fromCents(total);
+  }
+
+  private async split(
+    userId: string,
+    month: string,
+    keep: (e: { paymentMethod: string; isCardPayment: boolean }) => boolean,
+  ): Promise<SplitTotal> {
+    return {
+      beforeMonth: await this.expenseTotal(userId, keep, (m) => m < month),
+      inMonth: await this.expenseTotal(userId, keep, (m) => m === month),
+    };
+  }
+
+  accountOutflow(userId: string, month: string): Promise<Money> {
+    return this.expenseTotal(userId, (e) => e.paymentMethod !== 'CREDIT', (m) => m === month);
+  }
+
+  creditSpent(userId: string, month: string): Promise<Money> {
+    return this.expenseTotal(userId, (e) => e.paymentMethod === 'CREDIT', (m) => m === month);
+  }
+
+  async loanPaymentsReceived(userId: string, month: string): Promise<Money> {
+    let total = 0;
+    for (const p of await this.loanPayments.listByUser(userId)) {
+      if (monthOf(p.paidAt) === month) total += p.amount.cents;
+    }
+    return Money.fromCents(total);
+  }
+
+  cardCharges(userId: string, month: string): Promise<SplitTotal> {
+    return this.split(userId, month, (e) => e.paymentMethod === 'CREDIT');
+  }
+
+  cardPayments(userId: string, month: string): Promise<SplitTotal> {
+    return this.split(userId, month, (e) => e.isCardPayment);
+  }
+
+  // Direct loans only (no expense); the others are counted through their expense.
+  private async directLoanTotal(
+    userId: string,
+    keep: (paymentMethod: string) => boolean,
+    inWindow: (month: string) => boolean,
+  ): Promise<Money> {
+    let total = 0;
+    for (const l of await this.loans.listByUser(userId, {})) {
+      if (l.expenseId !== null || !l.paymentMethod || !l.lentAt) continue;
+      if (keep(l.paymentMethod) && inWindow(monthOf(l.lentAt))) total += l.amount.cents;
+    }
+    return Money.fromCents(total);
+  }
+
+  directLoansOutflow(userId: string, month: string): Promise<Money> {
+    return this.directLoanTotal(userId, (m) => m !== 'CREDIT', (m) => m === month);
+  }
+
+  async directLoansOnCredit(userId: string, month: string): Promise<SplitTotal> {
+    const credit = (m: string) => m === 'CREDIT';
+    return {
+      beforeMonth: await this.directLoanTotal(userId, credit, (m) => m < month),
+      inMonth: await this.directLoanTotal(userId, credit, (m) => m === month),
+    };
   }
 }
