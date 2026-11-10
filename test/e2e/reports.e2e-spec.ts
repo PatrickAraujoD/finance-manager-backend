@@ -473,6 +473,147 @@ describe('reports endpoints', () => {
     });
   });
 
+  describe('money lent directly (loans without an expense)', () => {
+    const MONTH = '2026-03';
+    const lendDirect = (s: Session, amountCents: number, paymentMethod: string, lentAt: string) =>
+      http()
+        .post('/loans')
+        .set(...bearer(s))
+        .send({ borrowerName: 'Carlos', dueDate: '2099-01-01', amountCents, paymentMethod, lentAt });
+    const account = async (s: Session, month = MONTH) =>
+      (await report(s, `income-vs-spent?month=${month}`)).body;
+    const card = async (s: Session, month = MONTH) => (await report(s, `card?month=${month}`)).body;
+    const earn = (s: Session, month: string, amountCents: number) =>
+      http().put(`/income/${month}`).set(...bearer(s)).send({ amountCents });
+
+    it('a loan on credit raises the card and does not come out of the salary', async () => {
+      await earn(ana, MONTH, 500000);
+      expect((await lendDirect(ana, 30000, 'CREDIT', '2026-03-10')).status).toBe(201);
+      expect(await account(ana)).toEqual({
+        month: MONTH,
+        incomeCents: 500000,
+        spentCents: 0,
+        receivedCents: 0,
+        creditSpentCents: 30000,
+        remainingCents: 500000,
+        percentSpent: 0,
+      });
+      expect(await card(ana)).toEqual({
+        month: MONTH,
+        openingCents: 0,
+        chargedCents: 30000,
+        paidCents: 0,
+        balanceCents: 30000,
+      });
+    });
+
+    it.each(['PIX', 'CASH', 'DEBIT'])(
+      'a %s loan comes out of the salary in the month it was lent, and only in that one',
+      async (method) => {
+        await earn(ana, '2026-03', 500000);
+        await earn(ana, '2026-04', 500000);
+        expect((await lendDirect(ana, 20000, method, '2026-03-31')).status).toBe(201);
+        expect(await account(ana, '2026-03')).toMatchObject({
+          spentCents: 20000,
+          creditSpentCents: 0,
+          remainingCents: 480000,
+        });
+        expect(await account(ana, '2026-04')).toMatchObject({ spentCents: 0, remainingCents: 500000 });
+        expect(await account(ana, '2026-02')).toMatchObject({ spentCents: 0 });
+        expect(await card(ana, '2026-03')).toMatchObject({ chargedCents: 0, balanceCents: 0 });
+      },
+    );
+
+    it('a loan born from an expense counts once, through the expense', async () => {
+      await earn(ana, MONTH, 500000);
+      await spend(ana, global, 40000, '2026-03-05');
+      await spend(ana, global, 6000, '2026-03-06', { method: 'CREDIT' });
+      // The rows were inserted directly with plain ids; the API wants UUIDs, so give them one.
+      const ids = ['00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002'];
+      await t.prisma.client.$executeRaw`UPDATE "Expense" SET "id" = ${ids[0]} WHERE "id" = 'e1'`;
+      await t.prisma.client.$executeRaw`UPDATE "Expense" SET "id" = ${ids[1]} WHERE "id" = 'e2'`;
+      for (const id of ids) {
+        const lent = await http()
+          .post('/loans')
+          .set(...bearer(ana))
+          .send({ borrowerName: 'Carlos', dueDate: '2099-01-01', expenseId: id });
+        expect(lent.status).toBe(201);
+      }
+      expect(await account(ana)).toMatchObject({
+        spentCents: 40000,
+        creditSpentCents: 6000,
+        remainingCents: 460000,
+      });
+      expect(await card(ana)).toMatchObject({ chargedCents: 6000, balanceCents: 6000 });
+    });
+
+    it('accumulates on the card until the bill is paid, and the payment leaves the account', async () => {
+      await earn(ana, '2026-04', 500000);
+      await lendDirect(ana, 30000, 'CREDIT', '2026-03-20');
+      await spend(ana, global, 10000, '2026-04-02', { method: 'CREDIT' });
+      expect(await card(ana, '2026-04')).toEqual({
+        month: '2026-04',
+        openingCents: 30000,
+        chargedCents: 10000,
+        paidCents: 0,
+        balanceCents: 40000,
+      });
+      await spend(ana, global, 40000, '2026-04-15', { isCardPayment: true });
+      expect(await card(ana, '2026-04')).toMatchObject({ paidCents: 40000, balanceCents: 0 });
+      expect(await account(ana, '2026-04')).toMatchObject({
+        spentCents: 40000,
+        creditSpentCents: 10000,
+        remainingCents: 460000,
+      });
+      expect(await account(ana, '2026-03')).toMatchObject({ spentCents: 0, creditSpentCents: 30000 });
+    });
+
+    it("never shows another user's loans", async () => {
+      await lendDirect(ana, 30000, 'CREDIT', '2026-03-10');
+      await lendDirect(ana, 20000, 'PIX', '2026-03-10');
+      for (const s of [bob, admin]) {
+        expect(await account(s)).toMatchObject({ spentCents: 0, creditSpentCents: 0 });
+        expect(await card(s)).toMatchObject({ chargedCents: 0, balanceCents: 0 });
+      }
+    });
+
+    it('income-vs-spent counts what left the account while the other reports ignore the bill and the loans', async () => {
+      await earn(ana, MONTH, 500000);
+      await spend(ana, global, 20000, '2026-03-02');
+      await spend(ana, anaCat, 100000, '2026-03-03', { method: 'CREDIT' });
+      await spend(ana, global, 100000, '2026-03-20', { isCardPayment: true });
+      await lendDirect(ana, 30000, 'PIX', '2026-03-10');
+      await lendDirect(ana, 5000, 'CREDIT', '2026-03-12');
+
+      // spentCents is the account outflow: Pix expense + bill payment + Pix loan.
+      expect(await account(ana)).toEqual({
+        month: MONTH,
+        incomeCents: 500000,
+        spentCents: 150000,
+        receivedCents: 0,
+        creditSpentCents: 105000,
+        remainingCents: 350000,
+        percentSpent: 30,
+      });
+      // The card: both credit items charged, the bill paid, the credit loan still owed.
+      expect(await card(ana)).toMatchObject({ chargedCents: 105000, paidCents: 100000, balanceCents: 5000 });
+
+      // The grouped reports are expense reports: they count the credit purchase, not the bill
+      // payment, and loans are not expenses.
+      const [cat, day, evo] = await Promise.all([
+        report(ana, `by-category?month=${MONTH}`),
+        report(ana, `by-day?month=${MONTH}`),
+        report(ana, `monthly-evolution?from=${MONTH}&to=${MONTH}`),
+      ]);
+      expect(cat.body.totalCents).toBe(120000);
+      expect(day.body.days).toEqual([
+        { date: '2026-03-02', totalCents: 20000 },
+        { date: '2026-03-03', totalCents: 100000 },
+      ]);
+      expect(evo.body.months).toEqual([{ month: MONTH, totalCents: 120000 }]);
+    });
+  });
+
   describe('consistency and isolation', () => {
     // income-vs-spent is left out on purpose: it measures what left the account (credit
     // purchases out, bill payments in), so it does not match the three grouped reports.
