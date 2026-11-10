@@ -9,6 +9,7 @@ import { Money } from '../../../src/domain/money';
 import { FakeCategoryRepository } from './fake-category-repository';
 import { FakeExpenseRepository } from './fake-expense-repository';
 import { FakeLoanPaymentRepository } from './fake-loan-payment-repository';
+import { FakeLoanRepository } from './fake-loan-repository';
 
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);
@@ -18,6 +19,7 @@ export class FakeReportRepository implements ReportRepository {
     private readonly expenses: FakeExpenseRepository,
     private readonly categories: FakeCategoryRepository,
     private readonly loanPayments: FakeLoanPaymentRepository,
+    private readonly loans: FakeLoanRepository,
   ) {}
 
   private async sumBy<K extends string>(
@@ -121,5 +123,31 @@ export class FakeReportRepository implements ReportRepository {
 
   cardPayments(userId: string, month: string): Promise<SplitTotal> {
     return this.split(userId, month, (e) => e.isCardPayment);
+  }
+
+  // Direct loans only (no expense); the others are counted through their expense.
+  private async directLoanTotal(
+    userId: string,
+    keep: (paymentMethod: string) => boolean,
+    inWindow: (month: string) => boolean,
+  ): Promise<Money> {
+    let total = 0;
+    for (const l of await this.loans.listByUser(userId, {})) {
+      if (l.expenseId !== null || !l.paymentMethod || !l.lentAt) continue;
+      if (keep(l.paymentMethod) && inWindow(monthOf(l.lentAt))) total += l.amount.cents;
+    }
+    return Money.fromCents(total);
+  }
+
+  directLoansOutflow(userId: string, month: string): Promise<Money> {
+    return this.directLoanTotal(userId, (m) => m !== 'CREDIT', (m) => m === month);
+  }
+
+  async directLoansOnCredit(userId: string, month: string): Promise<SplitTotal> {
+    const credit = (m: string) => m === 'CREDIT';
+    return {
+      beforeMonth: await this.directLoanTotal(userId, credit, (m) => m < month),
+      inMonth: await this.directLoanTotal(userId, credit, (m) => m === month),
+    };
   }
 }

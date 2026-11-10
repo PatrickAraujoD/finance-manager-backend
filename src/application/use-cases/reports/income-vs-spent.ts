@@ -8,11 +8,17 @@ export interface IncomeVsSpentReport {
   month: string;
   /** `null` when no income is registered for the month. */
   incomeCents: number | null;
-  /** What left the ACCOUNT: everything not paid with credit, card bill payments included. */
+  /**
+   * What left the ACCOUNT: everything not paid with credit, card bill payments and money lent
+   * directly (not on credit) included.
+   */
   spentCents: number;
   /** Loan payments received in the month. */
   receivedCents: number;
-  /** Credit card purchases of the month; informative, they do not leave the account. */
+  /**
+   * Credit card purchases of the month, money lent directly on credit included; informative,
+   * they do not leave the account.
+   */
   creditSpentCents: number;
   /** Income minus spent plus received; negative when more left than came in. */
   remainingCents: number | null;
@@ -29,19 +35,21 @@ export class IncomeVsSpent {
 
   async execute(actor: Actor, month: string): Promise<IncomeVsSpentReport> {
     requireMonth(month);
-    const [outflow, received, creditSpent, income] = await Promise.all([
+    const [outflow, lentOut, received, creditSpent, lentOnCredit, income] = await Promise.all([
       this.reports.accountOutflow(actor.id, month),
+      this.reports.directLoansOutflow(actor.id, month),
       this.reports.loanPaymentsReceived(actor.id, month),
       this.reports.creditSpent(actor.id, month),
+      this.reports.directLoansOnCredit(actor.id, month),
       this.incomes.find(actor.id, month),
     ]);
     return {
       month,
       ...computeAccountBalance({
         income: income?.amount ?? null,
-        outflows: [outflow],
+        outflows: [outflow, lentOut],
         inflows: [received],
-        creditPurchases: [creditSpent],
+        creditPurchases: [creditSpent, lentOnCredit.inMonth],
       }),
     };
   }

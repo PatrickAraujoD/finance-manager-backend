@@ -8,7 +8,7 @@ import { Money } from './money';
 export interface AccountBalanceInput {
   /** The month's income; `null` when none is registered. */
   income: Money | null;
-  /** Everything that left the account in the month (debit, Pix, cash, card bill payments). */
+  /** Everything that left the account in the month (debit, Pix, cash, bill payments, loans lent). */
   outflows: readonly Money[];
   /** Everything that came into the account in the month (loan payments received). */
   inflows: readonly Money[];

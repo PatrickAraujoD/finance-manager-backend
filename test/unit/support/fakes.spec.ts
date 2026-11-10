@@ -387,6 +387,7 @@ describe('FakeReportRepository', () => {
       expenses,
       categories,
       new FakeLoanPaymentRepository(new FakeLoanRepository()),
+      new FakeLoanRepository(),
     );
     const byCat = await repo.totalsByCategory('u1', '2026-11');
     expect(byCat.map((r) => [r.categoryName, r.total.cents])).toEqual([
@@ -469,7 +470,7 @@ describe('FakeReportRepository', () => {
         }),
       );
     }
-    const repo = new FakeReportRepository(expenses, categories, payments);
+    const repo = new FakeReportRepository(expenses, categories, payments, loans);
 
     expect((await repo.accountOutflow('u1', '2026-11')).cents).toBe(110);
     expect((await repo.creditSpent('u1', '2026-11')).cents).toBe(1000);
@@ -489,6 +490,7 @@ describe('FakeReportRepository', () => {
       expenses,
       new FakeCategoryRepository(expenses),
       new FakeLoanPaymentRepository(loans),
+      loans,
     );
     const lend = (id: string, userId: string, cents: number, method: 'PIX' | 'CREDIT', at: string) =>
       loans.save(

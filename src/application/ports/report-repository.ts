@@ -48,4 +48,12 @@ export interface ReportRepository {
   cardCharges(userId: string, month: string): Promise<SplitTotal>;
   /** Card bill payments (`isCardPayment`) up to the end of the month, split at its first day. */
   cardPayments(userId: string, month: string): Promise<SplitTotal>;
+  /**
+   * Money lent directly (loans with no expense) that left the account: any payment method but
+   * CREDIT, with `lentAt` in the month. Loans born from an expense are never counted here; the
+   * expense already is.
+   */
+  directLoansOutflow(userId: string, month: string): Promise<Money>;
+  /** Money lent directly on CREDIT up to the end of the month, split at its first day by `lentAt`. */
+  directLoansOnCredit(userId: string, month: string): Promise<SplitTotal>;
 }

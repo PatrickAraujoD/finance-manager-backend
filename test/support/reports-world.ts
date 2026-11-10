@@ -24,7 +24,7 @@ export function reportsWorld() {
   const incomes = new FakeIncomeRepository();
   const loans = new FakeLoanRepository();
   const loanPayments = new FakeLoanPaymentRepository(loans);
-  const reports = new FakeReportRepository(expenses, categories, loanPayments);
+  const reports = new FakeReportRepository(expenses, categories, loanPayments, loans);
   const lenders = new Set<string>();
   let counter = 0;
 

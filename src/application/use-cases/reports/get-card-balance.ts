@@ -19,16 +19,17 @@ export class GetCardBalance {
 
   async execute(actor: Actor, month: string): Promise<CardBalanceReport> {
     requireMonth(month);
-    const [charges, payments] = await Promise.all([
+    const [charges, lentOnCredit, payments] = await Promise.all([
       this.reports.cardCharges(actor.id, month),
+      this.reports.directLoansOnCredit(actor.id, month),
       this.reports.cardPayments(actor.id, month),
     ]);
     return {
       month,
       ...computeCardBalance({
-        chargesBefore: [charges.beforeMonth],
+        chargesBefore: [charges.beforeMonth, lentOnCredit.beforeMonth],
         paymentsBefore: [payments.beforeMonth],
-        chargesInMonth: [charges.inMonth],
+        chargesInMonth: [charges.inMonth, lentOnCredit.inMonth],
         paymentsInMonth: [payments.inMonth],
       }),
     };

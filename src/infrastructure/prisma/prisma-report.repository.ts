@@ -123,6 +123,29 @@ export function cardPaymentsSql(userId: string, month: string): Prisma.Sql {
     WHERE e."userId" = ${userId} AND e."spentAt" < ${end}::date AND e."isCardPayment"`;
 }
 
+// Money lent directly: loans with no expense, which carry their own "paymentMethod" and "lentAt".
+// A loan born from an expense has both NULL (a CHECK) and is already counted as that expense.
+
+export function directLoansOutflowSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(l."amountCents"), 0)::bigint AS "total"
+    FROM "Loan" l
+    WHERE l."userId" = ${userId} AND l."expenseId" IS NULL
+      AND l."lentAt" >= ${start}::date AND l."lentAt" < ${end}::date
+      AND l."paymentMethod" <> 'CREDIT'`;
+}
+
+export function directLoansOnCreditSql(userId: string, month: string): Prisma.Sql {
+  const { start, end } = monthWindow(month, month);
+  return Prisma.sql`
+    SELECT COALESCE(SUM(l."amountCents") FILTER (WHERE l."lentAt" < ${start}::date), 0)::bigint AS "beforeMonth",
+           COALESCE(SUM(l."amountCents") FILTER (WHERE l."lentAt" >= ${start}::date), 0)::bigint AS "inMonth"
+    FROM "Loan" l
+    WHERE l."userId" = ${userId} AND l."expenseId" IS NULL
+      AND l."lentAt" < ${end}::date AND l."paymentMethod" = 'CREDIT'`;
+}
+
 export class PrismaReportRepository implements ReportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
@@ -184,5 +207,13 @@ export class PrismaReportRepository implements ReportRepository {
 
   cardPayments(userId: string, month: string): Promise<SplitTotal> {
     return this.split(cardPaymentsSql(userId, month), 'the card payments');
+  }
+
+  directLoansOutflow(userId: string, month: string): Promise<Money> {
+    return this.single(directLoansOutflowSql(userId, month), 'the direct loans');
+  }
+
+  directLoansOnCredit(userId: string, month: string): Promise<SplitTotal> {
+    return this.split(directLoansOnCreditSql(userId, month), 'the direct loans on credit');
   }
 }
