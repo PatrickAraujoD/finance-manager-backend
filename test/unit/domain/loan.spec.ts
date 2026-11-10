@@ -92,4 +92,57 @@ describe('Loan', () => {
   it('rejects an invalid due date', () => {
     expect(() => Loan.create({ ...base, dueDate: new Date('nope') })).toThrow(ValidationError);
   });
+
+  describe('payment method and lent date', () => {
+    const lentAt = new Date('2026-11-08T00:00:00Z');
+    const direct = { ...base, paymentMethod: 'PIX' as const, lentAt };
+
+    it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)(
+      'accepts money lent directly with %s',
+      (paymentMethod) => {
+        expect(Loan.create({ ...direct, paymentMethod }).paymentMethod).toBe(paymentMethod);
+      },
+    );
+
+    it('requires both for money lent directly', () => {
+      expect(() => Loan.create({ ...direct, paymentMethod: null })).toThrow(ValidationError);
+      expect(() => Loan.create({ ...direct, lentAt: null })).toThrow(ValidationError);
+      expect(() => Loan.create({ ...base, paymentMethod: null, lentAt: null })).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('accepts a loan born from an expense with neither', () => {
+      const loan = Loan.create({ ...base, expenseId: 'e1', paymentMethod: null, lentAt: null });
+      expect(loan.paymentMethod).toBeNull();
+      expect(loan.lentAt).toBeNull();
+    });
+
+    it('refuses either one on a loan born from an expense', () => {
+      const fromExpense = { ...base, expenseId: 'e1' };
+      expect(() => Loan.create({ ...fromExpense, paymentMethod: 'PIX', lentAt: null })).toThrow(
+        ValidationError,
+      );
+      expect(() => Loan.create({ ...fromExpense, paymentMethod: null, lentAt })).toThrow(
+        ValidationError,
+      );
+      expect(() => Loan.create({ ...fromExpense, paymentMethod: 'PIX', lentAt })).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('refuses an unknown payment method', () => {
+      expect(() => Loan.create({ ...direct, paymentMethod: 'BOLETO' as never })).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('refuses an invalid lent date and one before 2000-01-01', () => {
+      expect(() => Loan.create({ ...direct, lentAt: new Date('nope') })).toThrow(ValidationError);
+      expect(() => Loan.create({ ...direct, lentAt: new Date('1999-12-31T00:00:00Z') })).toThrow(
+        ValidationError,
+      );
+      expect(() => Loan.create({ ...direct, lentAt: new Date('2000-01-01T00:00:00Z') })).not.toThrow();
+    });
+  });
 });
