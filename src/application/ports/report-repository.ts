@@ -34,8 +34,6 @@ export interface ReportRepository {
   totalsByDay(userId: string, month: string): Promise<DayTotal[]>;
   /** Inclusive range; only months with spending, ordered ascending. */
   totalsByMonth(userId: string, fromMonth: string, toMonth: string): Promise<MonthTotal[]>;
-  /** Zero when there is no spending. */
-  totalSpent(userId: string, month: string): Promise<Money>;
   /**
    * Balance aggregates, each ONE query scoped to `userId`; all return zero without data.
    * Money that left the account in the month: expenses NOT paid with CREDIT, card bill payments

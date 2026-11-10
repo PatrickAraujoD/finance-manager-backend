@@ -403,8 +403,8 @@ describe('FakeReportRepository', () => {
       ['2026-10', 10],
       ['2026-11', 175],
     ]);
-    expect((await repo.totalSpent('u1', '2026-11')).cents).toBe(175);
-    expect((await repo.totalSpent('u1', '2025-01')).cents).toBe(0);
+    expect((await repo.accountOutflow('u1', '2026-11')).cents).toBe(175);
+    expect((await repo.accountOutflow('u1', '2025-01')).cents).toBe(0);
   });
 
   it('aggregates the account and card figures like the SQL does, per user and month', async () => {

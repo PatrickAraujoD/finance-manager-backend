@@ -74,14 +74,6 @@ export function monthTotalsSql(userId: string, fromMonth: string, toMonth: strin
     ORDER BY "month" ASC`;
 }
 
-export function totalSpentSql(userId: string, month: string): Prisma.Sql {
-  const { start, end } = monthWindow(month, month);
-  return Prisma.sql`
-    SELECT COALESCE(SUM(e."amountCents"), 0)::bigint AS "total"
-    FROM "Expense" e
-    WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date`;
-}
-
 // Balance aggregates: one query each, never joined to categories. A credit purchase is an expense
 // whose "paymentMethod" is CREDIT; a card bill payment is one flagged "isCardPayment" (and, by
 // the domain rule, never paid with CREDIT).
@@ -160,13 +152,6 @@ export class PrismaReportRepository implements ReportRepository {
     );
     const totals = sum(rows, 'a month');
     return rows.map((r, i) => ({ month: r.month, total: totals[i] }));
-  }
-
-  async totalSpent(userId: string, month: string): Promise<Money> {
-    const rows = await this.prisma.client.$queryRaw<{ total: bigint }[]>(
-      totalSpentSql(userId, month),
-    );
-    return sum(rows, 'the month')[0];
   }
 
   private async single(query: Prisma.Sql, what: string): Promise<Money> {
