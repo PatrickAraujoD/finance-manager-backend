@@ -260,13 +260,13 @@ describe('CreateExpense', () => {
     expect((await get.execute(ana, id)).description).toBeUndefined();
   });
 
-  it.each(['CREDIT', 'DEBIT', 'PIX'] as const)('stores the payment method %s', async (paymentMethod) => {
+  it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)('stores the payment method %s', async (paymentMethod) => {
     const { create, get } = await setup();
     const { id } = await create.execute(ana, { ...valid, paymentMethod });
     expect((await get.execute(ana, id)).paymentMethod).toBe(paymentMethod);
   });
 
-  it.each([undefined, null, '', 'CASH', 'pix', 5])('rejects the payment method %p', async (v) => {
+  it.each([undefined, null, '', 'CHEQUE', 'cash', 5])('rejects the payment method %p', async (v) => {
     const { create, expenses } = await setup();
     await expect(
       create.execute(ana, { ...valid, paymentMethod: v as unknown as 'PIX' }),
@@ -338,7 +338,7 @@ describe('GetExpense / UpdateExpense / DeleteExpense ownership', () => {
 
   it('rejects an invalid payment method on update', async () => {
     const { update, id } = await withExpense();
-    for (const paymentMethod of ['CASH', '', null, 3]) {
+    for (const paymentMethod of ['CHEQUE', '', null, 3]) {
       await expect(
         update.execute(ana, id, { paymentMethod: paymentMethod as unknown as 'PIX' }),
       ).rejects.toBeInstanceOf(ValidationError);
@@ -451,7 +451,7 @@ describe('ListExpenses', () => {
   it('rejects an invalid payment method filter', async () => {
     const { list } = await seeded();
     await expect(
-      list.execute(ana, { paymentMethod: 'CASH' as unknown as 'PIX' }),
+      list.execute(ana, { paymentMethod: 'CHEQUE' as unknown as 'PIX' }),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 

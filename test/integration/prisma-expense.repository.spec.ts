@@ -80,7 +80,7 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     expect(await repo.findById('u1', 'missing')).toBeNull();
   });
 
-  it.each(['CREDIT', 'DEBIT', 'PIX'] as const)('persists the payment method %s', async (method) => {
+  it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)('persists the payment method %s', async (method) => {
     await repo.save(expense('e1', { paymentMethod: method }));
     expect((await repo.findById('u1', 'e1'))?.paymentMethod).toBe(method);
     const rows = await prisma.client.$queryRaw<{ m: string }[]>`
@@ -88,14 +88,14 @@ describe('PrismaExpenseRepository (Postgres)', () => {
     expect(rows[0].m).toBe(method);
   });
 
-  it('requires the payment method in the database itself (no default, only the 3 values)', async () => {
+  it('requires the payment method in the database itself (no default, only the 4 values)', async () => {
     const insert = (id: string, columns: string, values: string) =>
       prisma.client.$executeRawUnsafe(
         `INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone"${columns},"spentAt")
          VALUES ('${id}','u1','c1',100,true${values},'2026-11-01')`,
       );
     await expect(insert('no-method', '', '')).rejects.toThrow();
-    await expect(insert('cash', ',"paymentMethod"', ",'CASH'")).rejects.toThrow();
+    await expect(insert('cheque', ',"paymentMethod"', ",'CHEQUE'")).rejects.toThrow();
     await expect(insert('ok', ',"paymentMethod"', ",'DEBIT'")).resolves.toBe(1);
   });
 

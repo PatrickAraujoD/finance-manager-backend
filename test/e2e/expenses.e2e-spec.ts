@@ -123,7 +123,7 @@ describe('expenses endpoints', () => {
       });
     });
 
-    it.each(['CREDIT', 'DEBIT', 'PIX'])('stores and returns the payment method %s', async (paymentMethod) => {
+    it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'])('stores and returns the payment method %s', async (paymentMethod) => {
       const res = await post(ana, { ...valid(), paymentMethod });
       expect(res.status).toBe(201);
       expect((await get(ana, res.body.id)).body.paymentMethod).toBe(paymentMethod);
@@ -139,7 +139,8 @@ describe('expenses endpoints', () => {
     it.each([
       ['null', null],
       ['an empty string', ''],
-      ['an unknown method', 'CASH'],
+      ['an unknown method', 'CHEQUE'],
+      ['lowercase cash', 'cash'],
       ['lowercase', 'pix'],
       ['a number', 1],
       ['an array', ['PIX']],
@@ -424,7 +425,8 @@ describe('expenses endpoints', () => {
       { categoryId: 'abc' },
       { paidAlone: 'no' },
       { paymentMethod: null },
-      { paymentMethod: 'CASH' },
+      { paymentMethod: 'CHEQUE' },
+      { paymentMethod: 'cash' },
       { paymentMethod: 'pix' },
       { paymentMethod: 1 },
       { description: null },
@@ -527,7 +529,7 @@ describe('expenses endpoints', () => {
       expect(pix.total).toBe(2);
       expect(pix.items.every((e: { paymentMethod: string }) => e.paymentMethod === 'PIX')).toBe(true);
       expect((await list(ana, '?paymentMethod=PIX&limit=1')).body).toMatchObject({ total: 2 });
-      for (const bad of ['CASH', 'pix', '', 'PIX&paymentMethod=CREDIT']) {
+      for (const bad of ['CHEQUE', 'cash', 'pix', '', 'PIX&paymentMethod=CREDIT']) {
         expect((await list(ana, `?paymentMethod=${bad}`)).status).toBe(400);
       }
     });

@@ -35,11 +35,11 @@ describe('Expense', () => {
     expect(e.description).toBeUndefined();
   });
 
-  it.each(['CREDIT', 'DEBIT', 'PIX'] as const)('keeps the payment method %s', (paymentMethod) => {
+  it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'] as const)('keeps the payment method %s', (paymentMethod) => {
     expect(Expense.create({ ...expenseProps, paymentMethod }).paymentMethod).toBe(paymentMethod);
   });
 
-  it.each(['', 'CASH', 'pix', undefined, null])('rejects the payment method %p', (v) => {
+  it.each(['', 'CHEQUE', 'cash', 'pix', undefined, null])('rejects the payment method %p', (v) => {
     expect(() => Expense.create({ ...expenseProps, paymentMethod: v as never })).toThrow(
       ValidationError,
     );

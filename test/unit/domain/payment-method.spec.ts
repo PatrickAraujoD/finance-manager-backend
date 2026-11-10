@@ -2,11 +2,11 @@ import { ValidationError } from '../../../src/domain/errors';
 import { parsePaymentMethod } from '../../../src/domain/payment-method';
 
 describe('parsePaymentMethod', () => {
-  it.each(['CREDIT', 'DEBIT', 'PIX'])('accepts %s', (v) => {
+  it.each(['CREDIT', 'DEBIT', 'PIX', 'CASH'])('accepts %s', (v) => {
     expect(parsePaymentMethod(v)).toBe(v);
   });
 
-  it.each(['', 'credit', 'Pix', 'CASH', 'cartao', ' PIX'])('rejects %p', (v) => {
+  it.each(['', 'credit', 'Pix', 'cash', 'cartao', ' PIX'])('rejects %p', (v) => {
     expect(() => parsePaymentMethod(v)).toThrow(ValidationError);
   });
 
