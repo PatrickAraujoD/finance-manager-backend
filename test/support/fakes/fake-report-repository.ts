@@ -21,10 +21,12 @@ export class FakeReportRepository implements ReportRepository {
     userId: string,
     keyOf: (spentAt: Date, categoryId: string) => K,
     include: (spentAt: Date) => boolean,
+    // Same rule as the SQL of the grouped reports; totalSpent still counts bill payments.
+    skipCardPayments = true,
   ): Promise<Map<K, number>> {
     const totals = new Map<K, number>();
     for (const e of await this.expenses.listByUser(userId, {})) {
-      if (!include(e.spentAt)) continue;
+      if (!include(e.spentAt) || (skipCardPayments && e.isCardPayment)) continue;
       const key = keyOf(e.spentAt, e.categoryId);
       totals.set(key, (totals.get(key) ?? 0) + e.amount.cents);
     }
@@ -76,6 +78,7 @@ export class FakeReportRepository implements ReportRepository {
       userId,
       () => 'all',
       (d) => monthOf(d) === month,
+      false,
     );
     return Money.fromCents(totals.get('all') ?? 0);
   }

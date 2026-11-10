@@ -33,6 +33,9 @@ function sum(rows: { total: bigint }[], what: string): Money[] {
 // Every query filters by "userId" first and then by the half-open date range, so it uses the
 // (userId, spentAt) index; aggregation (GROUP BY / SUM) happens in the database. Values are
 // always bound parameters (Prisma.sql), never concatenated.
+//
+// The grouped reports skip card bill payments ("isCardPayment"): the credit purchases they pay
+// were already counted when made, so counting the payment too would count the money twice.
 
 export function categoryTotalsSql(userId: string, month: string): Prisma.Sql {
   const { start, end } = monthWindow(month, month);
@@ -41,6 +44,7 @@ export function categoryTotalsSql(userId: string, month: string): Prisma.Sql {
     FROM "Expense" e
     JOIN "Category" c ON c."id" = e."categoryId"
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
+      AND NOT e."isCardPayment"
     GROUP BY c."id", c."name"
     ORDER BY "total" DESC, c."name" ASC, c."id" ASC`;
 }
@@ -51,6 +55,7 @@ export function dayTotalsSql(userId: string, month: string): Prisma.Sql {
     SELECT to_char(e."spentAt"::timestamp, 'YYYY-MM-DD') AS "date", SUM(e."amountCents")::bigint AS "total"
     FROM "Expense" e
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
+      AND NOT e."isCardPayment"
     GROUP BY e."spentAt"
     ORDER BY e."spentAt" ASC`;
 }
@@ -61,6 +66,7 @@ export function monthTotalsSql(userId: string, fromMonth: string, toMonth: strin
     SELECT to_char(e."spentAt"::timestamp, 'YYYY-MM') AS "month", SUM(e."amountCents")::bigint AS "total"
     FROM "Expense" e
     WHERE e."userId" = ${userId} AND e."spentAt" >= ${start}::date AND e."spentAt" < ${end}::date
+      AND NOT e."isCardPayment"
     GROUP BY to_char(e."spentAt"::timestamp, 'YYYY-MM')
     ORDER BY "month" ASC`;
 }
