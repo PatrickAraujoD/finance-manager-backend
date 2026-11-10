@@ -2,7 +2,7 @@ import { requireMonth } from '../../../domain/entities/monthly-income';
 import { Actor } from '../../actor';
 import { IncomeRepository } from '../../ports/income-repository';
 import { ReportRepository } from '../../ports/report-repository';
-import { ratioBasisPoints, toPercentage } from './basis-points';
+import { ratioBasisPoints, toPercentage } from '../../../domain/basis-points';
 
 export interface IncomeVsSpentReport {
   month: string;
