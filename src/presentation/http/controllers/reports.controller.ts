@@ -1,15 +1,18 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ByCategory } from '../../../application/use-cases/reports/by-category';
 import { ByDay } from '../../../application/use-cases/reports/by-day';
+import { GetCardBalance } from '../../../application/use-cases/reports/get-card-balance';
 import { IncomeVsSpent } from '../../../application/use-cases/reports/income-vs-spent';
 import { MonthlyEvolution } from '../../../application/use-cases/reports/monthly-evolution';
 import { AuthenticatedUser, CurrentUser } from '../decorators/current-user.decorator';
 import { MonthQueryDto, MonthRangeQueryDto } from '../dtos/reports.dto';
 import {
+  CardBalanceView,
   CategoryReportView,
   DayReportView,
   EvolutionReportView,
   IncomeVsSpentView,
+  toCardBalanceView,
   toCategoryReportView,
   toDayReportView,
   toEvolutionReportView,
@@ -27,6 +30,7 @@ export class ReportsController {
     private readonly byDay: ByDay,
     private readonly monthlyEvolution: MonthlyEvolution,
     private readonly incomeVsSpent: IncomeVsSpent,
+    private readonly cardBalance: GetCardBalance,
   ) {}
 
   @Get('by-category')
@@ -61,5 +65,13 @@ export class ReportsController {
     @Query() query: MonthQueryDto,
   ): Promise<IncomeVsSpentView> {
     return toIncomeVsSpentView(await this.incomeVsSpent.execute(actor, query.month));
+  }
+
+  @Get('card')
+  async card(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Query() query: MonthQueryDto,
+  ): Promise<CardBalanceView> {
+    return toCardBalanceView(await this.cardBalance.execute(actor, query.month));
   }
 }

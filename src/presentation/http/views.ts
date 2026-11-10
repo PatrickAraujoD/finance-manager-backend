@@ -2,6 +2,7 @@ import { CategoryReport } from '../../application/use-cases/reports/by-category'
 import { DayReport } from '../../application/use-cases/reports/by-day';
 import { LoanDetails } from '../../application/use-cases/loans/get-loan';
 import { IncomeVsSpentReport } from '../../application/use-cases/reports/income-vs-spent';
+import { CardBalanceReport } from '../../application/use-cases/reports/get-card-balance';
 import { EvolutionReport } from '../../application/use-cases/reports/monthly-evolution';
 import { formatCalendarDate } from '../../domain/calendar-date';
 import { LoanPayment } from '../../domain/entities/loan-payment';
@@ -219,6 +220,8 @@ export interface IncomeVsSpentView {
   month: string;
   incomeCents: number | null;
   spentCents: number;
+  receivedCents: number;
+  creditSpentCents: number;
   remainingCents: number | null;
   percentSpent: number | null;
 }
@@ -228,7 +231,27 @@ export function toIncomeVsSpentView(report: IncomeVsSpentReport): IncomeVsSpentV
     month: report.month,
     incomeCents: report.incomeCents,
     spentCents: report.spentCents,
+    receivedCents: report.receivedCents,
+    creditSpentCents: report.creditSpentCents,
     remainingCents: report.remainingCents,
     percentSpent: report.percentSpent,
+  };
+}
+
+export interface CardBalanceView {
+  month: string;
+  openingCents: number;
+  chargedCents: number;
+  paidCents: number;
+  balanceCents: number;
+}
+
+export function toCardBalanceView(report: CardBalanceReport): CardBalanceView {
+  return {
+    month: report.month,
+    openingCents: report.openingCents,
+    chargedCents: report.chargedCents,
+    paidCents: report.paidCents,
+    balanceCents: report.balanceCents,
   };
 }
