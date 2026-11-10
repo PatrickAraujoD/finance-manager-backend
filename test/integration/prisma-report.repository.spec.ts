@@ -62,6 +62,25 @@ describe('PrismaReportRepository (Postgres)', () => {
         ${how.isCardPayment ?? false}, ${date}::date)`;
   }
 
+  /** Money lent directly (no expense); or, with `fromExpense`, a loan born from that expense. */
+  async function lendDirect(
+    userId: string,
+    cents: number,
+    how: { method: 'CREDIT' | 'DEBIT' | 'PIX' | 'CASH'; lentAt: string } | { fromExpense: string },
+  ) {
+    const id = `l${++seq}`;
+    if ('fromExpense' in how) {
+      await prisma.client.$executeRaw`
+        INSERT INTO "Loan" ("id","userId","borrowerName","amountCents","dueDate","expenseId")
+        VALUES (${id}, ${userId}, 'Carlos', ${cents}, '2099-01-01'::date, ${how.fromExpense})`;
+      return;
+    }
+    await prisma.client.$executeRaw`
+      INSERT INTO "Loan" ("id","userId","borrowerName","amountCents","dueDate","paymentMethod","lentAt")
+      VALUES (${id}, ${userId}, 'Carlos', ${cents}, '2099-01-01'::date, ${how.method}::"PaymentMethod",
+        ${how.lentAt}::date)`;
+  }
+
   const cents = (rows: { total: { cents: number } }[]) => rows.map((r) => r.total.cents);
 
   describe('empty data', () => {
@@ -301,6 +320,59 @@ describe('PrismaReportRepository (Postgres)', () => {
       expect([payments.beforeMonth.cents, payments.inMonth.cents]).toEqual([8888, 0]);
       const none = await repo.cardCharges('admin', '2026-11');
       expect([none.beforeMonth.cents, none.inMonth.cents]).toEqual([0, 0]);
+    });
+  });
+
+  describe('money lent directly', () => {
+    beforeEach(async () => {
+      await lendDirect('ana', 10, { method: 'PIX', lentAt: '2026-11-01' });
+      await lendDirect('ana', 20, { method: 'CASH', lentAt: '2026-11-30' });
+      await lendDirect('ana', 40, { method: 'DEBIT', lentAt: '2026-11-15' });
+      await lendDirect('ana', 1000, { method: 'CREDIT', lentAt: '2026-11-05' });
+      await lendDirect('ana', 300, { method: 'CREDIT', lentAt: '2026-10-31' });
+      await lendDirect('ana', 500, { method: 'CREDIT', lentAt: '2025-12-31' });
+      await lendDirect('ana', 7, { method: 'PIX', lentAt: '2026-12-01' });
+      await lendDirect('ana', 90, { method: 'CREDIT', lentAt: '2026-12-01' });
+      await lendDirect('bob', 999, { method: 'PIX', lentAt: '2026-11-10' });
+      await lendDirect('bob', 888, { method: 'CREDIT', lentAt: '2026-11-10' });
+      // A loan born from an expense is already counted through the expense: never twice.
+      await spend('ana', 'c-food', 4000, '2026-11-10', { method: 'PIX' });
+      await spend('ana', 'c-food', 6000, '2026-11-11', { method: 'CREDIT' });
+      await lendDirect('ana', 4000, { fromExpense: 'e1' });
+      await lendDirect('ana', 6000, { fromExpense: 'e2' });
+    });
+
+    const split = (s: { beforeMonth: { cents: number }; inMonth: { cents: number } }) => [
+      s.beforeMonth.cents,
+      s.inMonth.cents,
+    ];
+
+    it('the outflow sums the non credit loans lent in the month, edges included', async () => {
+      expect((await repo.directLoansOutflow('ana', '2026-11')).cents).toBe(70);
+      expect((await repo.directLoansOutflow('ana', '2026-12')).cents).toBe(7);
+      expect((await repo.directLoansOutflow('ana', '2026-10')).cents).toBe(0);
+    });
+
+    it('the credit loans split at the first day of the month', async () => {
+      expect(split(await repo.directLoansOnCredit('ana', '2026-11'))).toEqual([800, 1000]);
+      expect(split(await repo.directLoansOnCredit('ana', '2026-12'))).toEqual([1800, 90]);
+      expect(split(await repo.directLoansOnCredit('ana', '2026-01'))).toEqual([500, 0]);
+    });
+
+    it('crosses the year boundary (December to January)', async () => {
+      expect(split(await repo.directLoansOnCredit('ana', '2026-01'))).toEqual([500, 0]);
+      expect(split(await repo.directLoansOnCredit('ana', '2025-12'))).toEqual([0, 500]);
+      await lendDirect('ana', 11, { method: 'PIX', lentAt: '2026-01-01' });
+      await lendDirect('ana', 13, { method: 'PIX', lentAt: '2025-12-31' });
+      expect((await repo.directLoansOutflow('ana', '2025-12')).cents).toBe(13);
+      expect((await repo.directLoansOutflow('ana', '2026-01')).cents).toBe(11);
+    });
+
+    it('is scoped to the user and is zero without loans', async () => {
+      expect((await repo.directLoansOutflow('bob', '2026-11')).cents).toBe(999);
+      expect(split(await repo.directLoansOnCredit('bob', '2026-11'))).toEqual([0, 888]);
+      expect((await repo.directLoansOutflow('admin', '2026-11')).cents).toBe(0);
+      expect(split(await repo.directLoansOnCredit('admin', '2026-11'))).toEqual([0, 0]);
     });
   });
 
