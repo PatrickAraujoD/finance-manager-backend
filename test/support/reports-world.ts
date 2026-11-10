@@ -89,6 +89,41 @@ export function reportsWorld() {
         }),
       );
     },
+    /** Money lent directly (no expense), on a distinct loan per call. */
+    async lend(
+      userId: string,
+      cents: number,
+      lentAt: string,
+      paymentMethod: PaymentMethod = 'PIX',
+    ): Promise<void> {
+      await loans.save(
+        Loan.create({
+          id: `direct-${++counter}`,
+          userId,
+          borrowerName: 'Carlos',
+          amount: Money.fromCents(cents),
+          dueDate: new Date('2099-01-01T00:00:00Z'),
+          expenseId: null,
+          paymentMethod,
+          lentAt: new Date(`${lentAt}T00:00:00Z`),
+        }),
+      );
+    },
+    /** A loan born from an expense: it carries no method or date, the expense already counts. */
+    async lendFromExpense(userId: string, expenseId: string, cents: number): Promise<void> {
+      await loans.save(
+        Loan.create({
+          id: `born-${++counter}`,
+          userId,
+          borrowerName: 'Carlos',
+          amount: Money.fromCents(cents),
+          dueDate: new Date('2099-01-01T00:00:00Z'),
+          expenseId,
+          paymentMethod: null,
+          lentAt: null,
+        }),
+      );
+    },
     async earn(userId: string, month: string, cents: number): Promise<void> {
       await incomes.upsert(MonthlyIncome.create({ userId, month, amount: Money.fromCents(cents) }));
     },

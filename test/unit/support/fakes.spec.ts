@@ -481,6 +481,52 @@ describe('FakeReportRepository', () => {
     expect((await repo.accountOutflow('u2', '2026-11')).cents).toBe(0);
     expect((await repo.loanPaymentsReceived('u2', '2026-11')).cents).toBe(0);
   });
+
+  it('sums money lent directly by method and date, and skips loans born from expenses', async () => {
+    const expenses = new FakeExpenseRepository();
+    const loans = new FakeLoanRepository();
+    const repo = new FakeReportRepository(
+      expenses,
+      new FakeCategoryRepository(expenses),
+      new FakeLoanPaymentRepository(loans),
+    );
+    const lend = (id: string, userId: string, cents: number, method: 'PIX' | 'CREDIT', at: string) =>
+      loans.save(
+        Loan.create({
+          id,
+          userId,
+          borrowerName: 'Zé',
+          amount: Money.fromCents(cents),
+          dueDate: new Date('2099-01-01T00:00:00Z'),
+          expenseId: null,
+          paymentMethod: method,
+          lentAt: new Date(`${at}T00:00:00Z`),
+        }),
+      );
+    await lend('a', 'u1', 10, 'PIX', '2026-11-30');
+    await lend('b', 'u1', 20, 'PIX', '2026-12-01');
+    await lend('c', 'u1', 300, 'CREDIT', '2026-10-31');
+    await lend('d', 'u1', 4000, 'CREDIT', '2026-11-01');
+    await lend('e', 'u1', 50000, 'CREDIT', '2026-12-01');
+    await lend('f', 'u2', 999, 'PIX', '2026-11-30');
+    await loans.save(
+      Loan.create({
+        id: 'g',
+        userId: 'u1',
+        borrowerName: 'Zé',
+        amount: Money.fromCents(7),
+        dueDate: new Date('2099-01-01T00:00:00Z'),
+        expenseId: 'x1',
+        paymentMethod: null,
+        lentAt: null,
+      }),
+    );
+
+    expect((await repo.directLoansOutflow('u1', '2026-11')).cents).toBe(10);
+    const credit = await repo.directLoansOnCredit('u1', '2026-11');
+    expect([credit.beforeMonth.cents, credit.inMonth.cents]).toEqual([300, 4000]);
+    expect((await repo.directLoansOutflow('u3', '2026-11')).cents).toBe(0);
+  });
 });
 
 describe('FakePasswordHasher', () => {

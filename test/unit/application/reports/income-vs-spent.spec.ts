@@ -204,6 +204,69 @@ describe('IncomeVsSpent', () => {
     });
   });
 
+  describe('money lent directly', () => {
+    it('a Pix, debit or cash loan leaves the account in the month it was lent', async () => {
+      const { w, report } = await setup();
+      await w.earn('ana', '2026-11', 100000);
+      await w.lend('ana', 10000, '2026-11-01', 'PIX');
+      await w.lend('ana', 2000, '2026-11-30', 'DEBIT');
+      await w.lend('ana', 300, '2026-11-15', 'CASH');
+      expect(await report.execute(ana, '2026-11')).toMatchObject({
+        spentCents: 12300,
+        creditSpentCents: 0,
+        remainingCents: 87700,
+        percentSpent: 12.3,
+      });
+    });
+
+    it('does not count a loan lent in another month', async () => {
+      const { w, report } = await setup();
+      await w.earn('ana', '2026-11', 100000);
+      await w.lend('ana', 500, '2026-10-31', 'PIX');
+      await w.lend('ana', 700, '2026-12-01', 'PIX');
+      expect(await report.execute(ana, '2026-11')).toMatchObject({
+        spentCents: 0,
+        remainingCents: 100000,
+      });
+    });
+
+    it('a credit loan shows up as credit and never leaves the account', async () => {
+      const { w, report } = await setup();
+      await w.earn('ana', '2026-11', 100000);
+      await w.spend('ana', 'c1', 4000, '2026-11-02', { paymentMethod: 'CREDIT' });
+      await w.lend('ana', 25000, '2026-11-03', 'CREDIT');
+      expect(await report.execute(ana, '2026-11')).toMatchObject({
+        spentCents: 0,
+        creditSpentCents: 29000,
+        remainingCents: 100000,
+      });
+    });
+
+    it('a loan born from an expense does not count a second time', async () => {
+      const { w, report } = await setup();
+      await w.earn('ana', '2026-11', 100000);
+      await w.spend('ana', 'c1', 4000, '2026-11-02');
+      await w.lendFromExpense('ana', 'e1', 4000);
+      await w.spend('ana', 'c1', 600, '2026-11-03', { paymentMethod: 'CREDIT' });
+      await w.lendFromExpense('ana', 'e2', 600);
+      expect(await report.execute(ana, '2026-11')).toMatchObject({
+        spentCents: 4000,
+        creditSpentCents: 600,
+        remainingCents: 96000,
+      });
+    });
+
+    it('never mixes users', async () => {
+      const { w, report } = await setup();
+      await w.lend('ana', 100, '2026-11-01', 'PIX');
+      await w.lend('ana', 100, '2026-11-01', 'CREDIT');
+      expect(await report.execute(bob, '2026-11')).toMatchObject({
+        spentCents: 0,
+        creditSpentCents: 0,
+      });
+    });
+  });
+
   it.each(['2026-13', '', '2026-1', 'x'])('rejects the invalid month %j', async (month) => {
     const { report } = await setup();
     await expect(report.execute(ana, month)).rejects.toBeInstanceOf(ValidationError);

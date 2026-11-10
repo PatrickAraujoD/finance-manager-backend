@@ -88,6 +88,57 @@ describe('GetCardBalance', () => {
     });
   });
 
+  describe('money lent directly', () => {
+    it('a credit loan raises the card in the month it was lent', async () => {
+      const { w, card } = await setup();
+      await w.lend('ana', 25000, '2026-11-03', 'CREDIT');
+      expect(await card.execute(ana, '2026-11')).toMatchObject({
+        chargedCents: 25000,
+        balanceCents: 25000,
+      });
+    });
+
+    it('feeds the opening balance of later months and ignores later ones', async () => {
+      const { w, card } = await setup();
+      await w.lend('ana', 5000, '2026-10-31', 'CREDIT');
+      await w.lend('ana', 700, '2026-11-01', 'CREDIT');
+      await w.lend('ana', 999, '2026-12-01', 'CREDIT');
+      expect(await card.execute(ana, '2026-11')).toMatchObject({
+        openingCents: 5000,
+        chargedCents: 700,
+        balanceCents: 5700,
+      });
+    });
+
+    it('paying the bill brings a credit loan back to zero', async () => {
+      const { w, card } = await setup();
+      await w.lend('ana', 25000, '2026-11-03', 'CREDIT');
+      await w.spend('ana', 'c1', 25000, '2026-11-20', { isCardPayment: true });
+      expect(await card.execute(ana, '2026-11')).toMatchObject({ balanceCents: 0 });
+    });
+
+    it('Pix, debit and cash loans do not touch the card', async () => {
+      const { w, card } = await setup();
+      for (const method of ['PIX', 'DEBIT', 'CASH'] as const) {
+        await w.lend('ana', 100, '2026-11-03', method);
+      }
+      expect(await card.execute(ana, '2026-11')).toMatchObject({ chargedCents: 0, balanceCents: 0 });
+    });
+
+    it('a loan born from a credit expense does not count a second time', async () => {
+      const { w, card } = await setup();
+      await w.spend('ana', 'c1', 600, '2026-11-03', { paymentMethod: 'CREDIT' });
+      await w.lendFromExpense('ana', 'e1', 600);
+      expect(await card.execute(ana, '2026-11')).toMatchObject({ chargedCents: 600 });
+    });
+
+    it('never mixes users', async () => {
+      const { w, card } = await setup();
+      await w.lend('ana', 100, '2026-11-01', 'CREDIT');
+      expect(await card.execute(bob, '2026-11')).toMatchObject({ chargedCents: 0 });
+    });
+  });
+
   it.each(['2026-13', '', '2026-1', 'x'])('rejects the invalid month %j', async (month) => {
     const { card } = await setup();
     await expect(card.execute(ana, month)).rejects.toBeInstanceOf(ValidationError);
