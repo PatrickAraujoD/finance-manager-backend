@@ -56,10 +56,12 @@ describe('PrismaReportRepository (Postgres)', () => {
     date: string,
     how: { method?: 'CREDIT' | 'DEBIT' | 'PIX' | 'CASH'; isCardPayment?: boolean } = {},
   ) {
+    const id = `e${++seq}`;
     await prisma.client.$executeRaw`
       INSERT INTO "Expense" ("id","userId","categoryId","amountCents","paidAlone","paymentMethod","isCardPayment","spentAt")
-      VALUES (${`e${++seq}`}, ${userId}, ${categoryId}, ${cents}, true, ${how.method ?? 'PIX'}::"PaymentMethod",
+      VALUES (${id}, ${userId}, ${categoryId}, ${cents}, true, ${how.method ?? 'PIX'}::"PaymentMethod",
         ${how.isCardPayment ?? false}, ${date}::date)`;
+    return id;
   }
 
   /** Money lent directly (no expense); or, with `fromExpense`, a loan born from that expense. */
@@ -192,6 +194,8 @@ describe('PrismaReportRepository (Postgres)', () => {
         borrowerName: 'Devedor',
         amountCents: BigInt(1_000_000),
         dueDate: new Date('2027-12-31T00:00:00Z'),
+        paymentMethod: 'CASH',
+        lentAt: new Date('2026-01-01T00:00:00Z'),
       },
     });
   }
@@ -336,10 +340,10 @@ describe('PrismaReportRepository (Postgres)', () => {
       await lendDirect('bob', 999, { method: 'PIX', lentAt: '2026-11-10' });
       await lendDirect('bob', 888, { method: 'CREDIT', lentAt: '2026-11-10' });
       // A loan born from an expense is already counted through the expense: never twice.
-      await spend('ana', 'c-food', 4000, '2026-11-10', { method: 'PIX' });
-      await spend('ana', 'c-food', 6000, '2026-11-11', { method: 'CREDIT' });
-      await lendDirect('ana', 4000, { fromExpense: 'e1' });
-      await lendDirect('ana', 6000, { fromExpense: 'e2' });
+      const pix = await spend('ana', 'c-food', 4000, '2026-11-10', { method: 'PIX' });
+      const credit = await spend('ana', 'c-food', 6000, '2026-11-11', { method: 'CREDIT' });
+      await lendDirect('ana', 4000, { fromExpense: pix });
+      await lendDirect('ana', 6000, { fromExpense: credit });
     });
 
     const split = (s: { beforeMonth: { cents: number }; inMonth: { cents: number } }) => [
