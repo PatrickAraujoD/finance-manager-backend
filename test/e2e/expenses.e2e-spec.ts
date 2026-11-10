@@ -93,6 +93,7 @@ describe('expenses endpoints', () => {
           'createdAt',
           'description',
           'id',
+          'isCardPayment',
           'paidAlone',
           'paymentMethod',
           'receiptId',
@@ -106,6 +107,7 @@ describe('expenses endpoints', () => {
         amountCents: 2550,
         paidAlone: true,
         paymentMethod: 'PIX',
+        isCardPayment: false,
         spentAt: '2026-11-05',
         description: 'Almoço',
       });
@@ -127,6 +129,36 @@ describe('expenses endpoints', () => {
       const res = await post(ana, { ...valid(), paymentMethod });
       expect(res.status).toBe(201);
       expect((await get(ana, res.body.id)).body.paymentMethod).toBe(paymentMethod);
+    });
+
+    it.each(['PIX', 'DEBIT', 'CASH'])('creates a card bill payment made with %s', async (paymentMethod) => {
+      const res = await post(ana, { ...valid(), paymentMethod, isCardPayment: true });
+      expect(res.status).toBe(201);
+      expect((await get(ana, res.body.id)).body).toMatchObject({ isCardPayment: true, paymentMethod });
+    });
+
+    it('treats a missing or false isCardPayment as a regular expense', async () => {
+      const omitted = await post(ana, valid());
+      const explicit = await post(ana, { ...valid(), paymentMethod: 'CREDIT', isCardPayment: false });
+      expect((await get(ana, omitted.body.id)).body.isCardPayment).toBe(false);
+      expect((await get(ana, explicit.body.id)).body.isCardPayment).toBe(false);
+    });
+
+    it('refuses to pay the card bill with CREDIT (400) and saves nothing', async () => {
+      const res = await post(ana, { ...valid(), paymentMethod: 'CREDIT', isCardPayment: true });
+      expect(res.status).toBe(400);
+      await expectNoExpenses();
+    });
+
+    it.each([
+      ['null', null],
+      ['text', 'true'],
+      ['a number', 1],
+      ['an array', [true]],
+      ['an object', { a: 1 }],
+    ])('rejects an isCardPayment that is %s (400)', async (_l, isCardPayment) => {
+      expect((await post(ana, { ...valid(), isCardPayment })).status).toBe(400);
+      await expectNoExpenses();
     });
 
     it('requires the payment method (400)', async () => {
@@ -389,6 +421,46 @@ describe('expenses endpoints', () => {
       expect((await patch(ana, id, { amountCents: 5 })).body.paymentMethod).toBe('DEBIT');
     });
 
+    describe('isCardPayment', () => {
+      it('flags and unflags an expense, keeping the rest', async () => {
+        const { id } = (await post(ana, valid())).body;
+        const flagged = await patch(ana, id, { isCardPayment: true });
+        expect(flagged.status).toBe(200);
+        expect(flagged.body).toMatchObject({ isCardPayment: true, paymentMethod: 'PIX', amountCents: 2550 });
+        expect((await get(ana, id)).body.isCardPayment).toBe(true);
+        expect((await patch(ana, id, { amountCents: 7 })).body.isCardPayment).toBe(true);
+        expect((await patch(ana, id, { isCardPayment: false })).body.isCardPayment).toBe(false);
+      });
+
+      it('refuses to flag an expense that is on CREDIT (400) and keeps it as it was', async () => {
+        const { id } = (await post(ana, { ...valid(), paymentMethod: 'CREDIT' })).body;
+        expect((await patch(ana, id, { isCardPayment: true })).status).toBe(400);
+        expect((await get(ana, id)).body).toMatchObject({ isCardPayment: false, paymentMethod: 'CREDIT' });
+      });
+
+      it('refuses to move a card bill payment to CREDIT (400) unless the flag is cleared too', async () => {
+        const { id } = (await post(ana, { ...valid(), isCardPayment: true })).body;
+        expect((await patch(ana, id, { paymentMethod: 'CREDIT' })).status).toBe(400);
+        expect((await get(ana, id)).body).toMatchObject({ isCardPayment: true, paymentMethod: 'PIX' });
+        const both = await patch(ana, id, { paymentMethod: 'CREDIT', isCardPayment: false });
+        expect(both.status).toBe(200);
+        expect(both.body).toMatchObject({ isCardPayment: false, paymentMethod: 'CREDIT' });
+        expect((await patch(ana, id, { paymentMethod: 'CREDIT', isCardPayment: true })).status).toBe(400);
+      });
+
+      it.each([null, 'true', 1, 0, [true]])('rejects the value %j (400)', async (isCardPayment) => {
+        const { id } = (await post(ana, valid())).body;
+        expect((await patch(ana, id, { isCardPayment })).status).toBe(400);
+        expect((await get(ana, id)).body.isCardPayment).toBe(false);
+      });
+
+      it('does not let someone else change it (404)', async () => {
+        const { id } = (await post(ana, valid())).body;
+        expect((await patch(bob, id, { isCardPayment: true })).status).toBe(404);
+        expect((await get(ana, id)).body.isCardPayment).toBe(false);
+      });
+    });
+
     it('needs at least one field (400)', async () => {
       const { id } = (await post(ana, valid())).body;
       expect((await patch(ana, id, {})).status).toBe(400);
@@ -505,6 +577,7 @@ describe('expenses endpoints', () => {
           'createdAt',
           'description',
           'id',
+          'isCardPayment',
           'paidAlone',
           'paymentMethod',
           'receiptId',
@@ -533,6 +606,30 @@ describe('expenses endpoints', () => {
         expect((await list(ana, `?paymentMethod=${bad}`)).status).toBe(400);
       }
     });
+
+    it('filters card bill payments with isCardPayment=true|false (exact texts only)', async () => {
+      await post(ana, valid());
+      await post(ana, { ...valid(), paymentMethod: 'CREDIT' });
+      const bill = (await post(ana, { ...valid(), paymentMethod: 'CASH', isCardPayment: true })).body.id;
+      await post(bob, { ...valid(), isCardPayment: true });
+      const only = await list(ana, '?isCardPayment=true');
+      expect(only.status).toBe(200);
+      expect(only.body.total).toBe(1);
+      expect(only.body.items.map((e: { id: string }) => e.id)).toEqual([bill]);
+      expect((await list(ana, '?isCardPayment=false')).body.total).toBe(2);
+      expect((await list(ana)).body.total).toBe(3);
+      expect((await list(ana, '?isCardPayment=true&paymentMethod=CASH')).body.total).toBe(1);
+      expect((await list(ana, '?isCardPayment=true&paymentMethod=PIX')).body.total).toBe(0);
+      expect((await list(bob, '?isCardPayment=true')).body.total).toBe(1);
+      expect((await list(admin, '?isCardPayment=true')).body.total).toBe(0);
+    });
+
+    it.each(['TRUE', 'True', '1', '0', 'yes', '', 'true&isCardPayment=false', 'false&isCardPayment=false'])(
+      'rejects the isCardPayment filter %j (400)',
+      async (bad) => {
+        expect((await list(ana, `?isCardPayment=${bad}`)).status).toBe(400);
+      },
+    );
 
     it('filters by inclusive dates and by category', async () => {
       await seed();
