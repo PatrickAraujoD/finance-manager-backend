@@ -129,7 +129,7 @@ jobs:
             while read -r id; do docker logs "$id" > "ci-logs/postgres-${id}.log" 2>&1 || true; done
       - name: Enviar logs (sem segredos)
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: integration-e2e-logs
           path: ci-logs/
